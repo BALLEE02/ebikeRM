@@ -17,38 +17,38 @@
 
         // --- UTILITAIRES ---
         
-        // Parseur CSV simple mais robuste pour vos fichiers Decathlon
+        // Parseur CSV amélioré pour les fichiers Decathlon/E-Boost
         const parseCSV = (text) => {
             const lines = text.split(/\r?\n/);
             if (lines.length < 2) return [];
             
-            // Détection du séparateur (souvent ',' ou ';' dans Excel FR)
             const firstLine = lines[0];
             const separator = firstLine.includes(';') ? ';' : ',';
-            
             const headers = firstLine.split(separator).map(h => h.trim().replace(/"/g, ''));
             
             return lines.slice(1).filter(line => line.trim() !== '').map((line, index) => {
                 const values = line.split(separator).map(v => v.trim().replace(/"/g, ''));
-                const obj = { id: `csv-${index}` };
+                const obj = {};
                 headers.forEach((header, i) => {
-                    let val = values[i];
-                    // Nettoyage des nombres (ex: "52 333" ou "1 800,00 €")
-                    if (header.includes('Qty') || /^\d{4}$/.test(header)) {
-                        val = parseInt(val.replace(/\s/g, '').replace(',', '.')) || 0;
+                    let val = values[i] || "";
+                    // Nettoyage des nombres pour les colonnes de quantités
+                    if (header.toLowerCase().includes('qty') || /^\d{4}$/.test(header)) {
+                        // Supprime les espaces (normaux et insécables) et gère la virgule décimale
+                        const cleanVal = val.replace(/[\s\u00A0]/g, '').replace(',', '.');
+                        val = parseInt(cleanVal) || 0;
                     }
                     obj[header] = val;
                 });
 
-                // Mapping intelligent vers notre structure interne
+                // Mapping intelligent basé sur les headers observés dans tes fichiers
                 return {
-                    id: obj.id,
-                    name: obj['BIKES'] || obj['Bikes name'] || obj['CC Name'] || "Inconnu",
+                    id: `csv-${index}-${Date.now()}`,
+                    name: obj['BIKES'] || obj['Bikes name'] || obj['CC Name'] || obj['Bikes name\nEcosystem name'] || "Inconnu",
                     sport: obj['Sport'] || obj['Segment'] || "N/A",
-                    platform: obj['Plateform'] || obj['PLATFORM ICO'] || "N/A",
-                    motor: obj['EBOOST ekit'] || obj['Motor'] || obj['EBOOST (E-KIT) NAME ICO'] || "N/A",
-                    battery: obj['Battery'] || "N/A",
-                    display: obj['Cockpit/IHM'] || obj['Display'] || "N/A",
+                    platform: obj['Plateform'] || obj['PLATFORM ICO'] || obj['Plateforme'] || "N/A",
+                    motor: obj['EBOOST ekit'] || obj['Motor'] || obj['EBOOST (E-KIT) NAME ICO'] || obj['EBOOST (E-KIT) NAME\nICO'] || "N/A",
+                    battery: obj['Battery'] || obj['BATTERY'] || "N/A",
+                    display: obj['Cockpit/IHM'] || obj['Display'] || obj['DISPLAY'] || "N/A",
                     startYear: parseInt(obj['Start date']?.split('/').pop()) || 2026,
                     endYear: parseInt(obj['End date']?.split('/').pop()) || 2031,
                     q26: obj['Qty 2026'] || obj['2026'] || 0,
@@ -72,7 +72,7 @@
         // --- DONNÉES INITIALES ---
         const INITIAL_DATA = [
             { id: "1", name: "E-FL 900 V2 (LIGHT 16\")", sport: "CITY", platform: "HUB", motor: "Mahle X35", battery: "Inframe 500", display: "OIB eboost Mahle", startYear: 2029, endYear: 2031, q26: 0, q27: 0, q28: 0, q29: 1500, q30: 2500, q31: 3000 },
-            { id: "2", name: "E-FL 900 (LIGHT 16\")", sport: "CITY", platform: "HUB", motor: "Mahle X35", battery: "Inframe 500", display: "OIB eboost Mahle", startYear: 2026, endYear: 2029, q26: 2344, q27: 4560, q28: 1365, q29: 1750, q30: 0, q31: 0 },
+            { id: "2", name: "E-FL 900 (LIGHT 16\")", sport: "CITY", platform: "HUB", motor: "Mahle X35", battery: "Inframe 500", display: "OIB eboost Mahle", startYear: 2026, endYear: 2029, q26: 2344, q27: 4560, q28: 1365, q29: 1750, q30: 1700, q31: 0 },
             { id: "3", name: "Trekking E-ACTV 100 V2", sport: "TREK", platform: "HUB IF", motor: "VRMG92", battery: "inframe360", display: "ERGO 100", startYear: 2026, endYear: 2030, q26: 52333, q27: 0, q28: 45000, q29: 55000, q30: 57000, q31: 0 },
             { id: "4", name: "TREKKING E-EXPL 940", sport: "MTB", platform: "Owuru", motor: "Owuru Ride 3 M", battery: "Battery 370Wh", display: "ERGO 920", startYear: 2026, endYear: 2030, q26: 1173, q27: 0, q28: 1020, q29: 1200, q30: 1300, q31: 0 },
             { id: "5", name: "E FOLD 900 1\"", sport: "FOLD", platform: "HUB seat post", motor: "VRMG92", battery: "Battery seatpost", display: "ERGO500", startYear: 2026, endYear: 2029, q26: 8000, q27: 9000, q28: 10000, q29: 12000, q30: 0, q31: 0 },
@@ -125,16 +125,20 @@
                     <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
                         <h2 className="text-lg font-bold mb-6">Répartition par Sport (Quantités 2026)</h2>
                         <div className="flex flex-col gap-6">
-                            <div className="h-10 w-full bg-slate-100 rounded-full flex overflow-hidden shadow-inner">
-                                {segments.map((s, i) => {
-                                    const vol = bikes.filter(b => b.sport === s).reduce((sum, b) => sum + (b.q26 || 0), 0);
-                                    if (vol === 0 || total26 === 0) return null;
-                                    const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500'];
-                                    return (
-                                        <div key={s} style={{ width: `${(vol/total26)*100}%` }} className={`${colors[i % colors.length]} hover:brightness-110 transition-all`} title={`${s}: ${vol}`} />
-                                    );
-                                })}
-                            </div>
+                            {total26 > 0 ? (
+                                <div className="h-10 w-full bg-slate-100 rounded-full flex overflow-hidden shadow-inner">
+                                    {segments.map((s, i) => {
+                                        const vol = bikes.filter(b => b.sport === s).reduce((sum, b) => sum + (b.q26 || 0), 0);
+                                        if (vol <= 0) return null;
+                                        const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500'];
+                                        return (
+                                            <div key={s} style={{ width: `${(vol/total26)*100}%` }} className={`${colors[i % colors.length]} hover:brightness-110 transition-all`} title={`${s}: ${vol}`} />
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="h-10 w-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-sm italic">Aucune donnée de volume pour la sélection</div>
+                            )}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {segments.map((s, i) => {
                                     const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500'];
@@ -165,10 +169,15 @@
                         agg[ref][key] += b[key] || 0;
                     });
                 });
-                return Object.values(agg).sort((a,b) => b.q26 - a.q26);
+                return Object.values(agg).sort((a,b) => {
+                    // Tri par volume total sur toutes les années pour mettre les plus gros en haut
+                    const sumA = YEARS.reduce((s, y) => s + a[`q${y.toString().slice(-2)}`], 0);
+                    const sumB = YEARS.reduce((s, y) => s + b[`q${y.toString().slice(-2)}`], 0);
+                    return sumB - sumA;
+                });
             }, [bikes, type]);
 
-            const max = Math.max(...aggregated.flatMap(d => YEARS.map(y => d[`q${y.toString().slice(-2)}`])));
+            const max = Math.max(...aggregated.flatMap(d => YEARS.map(y => d[`q${y.toString().slice(-2)}`])), 1);
 
             return (
                 <div className="space-y-6 animate-fadeIn">
@@ -188,7 +197,7 @@
                             {YEARS.map(y => {
                                 const key = `q${y.toString().slice(-2)}`;
                                 const totalYear = aggregated.reduce((s, d) => s + d[key], 0);
-                                const h = max ? (totalYear / (max * 1.5)) * 100 : 0;
+                                const h = (totalYear / (max * 1.5)) * 100;
                                 return (
                                     <div key={y} className="flex-1 flex flex-col items-center gap-2 group relative">
                                         <div className="absolute -top-8 text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">{totalYear.toLocaleString()}</div>
@@ -231,15 +240,23 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [bikesData, setBikesData] = useState(INITIAL_DATA);
 
-            // Fonction de recherche fonctionnelle
+            // Filtrage global amélioré recherchant dans tous les champs textuels
             const filteredBikes = useMemo(() => {
-                const term = searchTerm.toLowerCase();
-                return bikesData.filter(b => 
-                    b.name.toLowerCase().includes(term) ||
-                    b.motor.toLowerCase().includes(term) ||
-                    b.sport.toLowerCase().includes(term) ||
-                    b.battery.toLowerCase().includes(term)
-                );
+                const term = searchTerm.trim().toLowerCase();
+                if (!term) return bikesData;
+                
+                return bikesData.filter(b => {
+                    const searchFields = [
+                        b.name,
+                        b.motor,
+                        b.sport,
+                        b.battery,
+                        b.platform,
+                        b.display
+                    ].map(field => (field || "").toString().toLowerCase());
+
+                    return searchFields.some(field => field.includes(term));
+                });
             }, [bikesData, searchTerm]);
 
             return (
@@ -248,7 +265,7 @@
                     <aside className="w-64 bg-slate-900 text-slate-400 flex flex-col fixed h-full z-20">
                         <div className="p-8 flex items-center gap-3 text-white">
                             <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/40"><IconBike size={24} /></div>
-                            <span className="font-black text-xl tracking-tighter italic">E-BOOST</span>
+                            <span className="font-black text-xl tracking-tighter italic uppercase">E-Boost</span>
                         </div>
                         <nav className="flex-1 px-4 py-6 space-y-1">
                             {[
@@ -262,6 +279,9 @@
                                 </button>
                             ))}
                         </nav>
+                        <div className="p-4 text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center border-t border-slate-800/50">
+                            Roadmap v1.2.0
+                        </div>
                     </aside>
 
                     {/* Main Content */}
@@ -271,18 +291,24 @@
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"><IconSearch /></div>
                                 <input 
                                     type="text" 
-                                    placeholder="Chercher un vélo, un moteur, un sport..." 
+                                    placeholder="Chercher vélo, moteur, segment..." 
                                     className="w-full bg-slate-100 border-none rounded-2xl pl-12 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
+                                {searchTerm && (
+                                    <button 
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    >✕</button>
+                                )}
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="text-right">
                                     <p className="text-sm font-bold text-slate-800">Utilisateur Decathlon</p>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Roadmap Manager</p>
                                 </div>
-                                <div className="w-10 h-10 bg-blue-100 rounded-full border border-blue-200" />
+                                <div className="w-10 h-10 bg-blue-100 rounded-full border border-blue-200 flex items-center justify-center font-bold text-blue-600 text-xs">BT</div>
                             </div>
                         </header>
 
@@ -298,7 +324,7 @@
                                             {YEARS.map(y => <div key={y} className="text-center">{y}</div>)}
                                         </div>
                                         <div className="space-y-4">
-                                            {filteredBikes.map(b => (
+                                            {filteredBikes.length > 0 ? filteredBikes.map(b => (
                                                 <div key={b.id} className="grid grid-cols-8 gap-4 items-center group">
                                                     <div className="col-span-2">
                                                         <p className="font-bold text-slate-800 truncate leading-tight">{b.name}</p>
@@ -314,7 +340,9 @@
                                                         />
                                                     </div>
                                                 </div>
-                                            ))}
+                                            )) : (
+                                                <div className="text-center py-10 text-slate-400 italic">Aucun vélo ne correspond à votre recherche</div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -333,14 +361,18 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {filteredBikes.map(b => (
+                                                {filteredBikes.length > 0 ? filteredBikes.map(b => (
                                                     <tr key={b.id} className="border-b border-slate-50 hover:bg-blue-50/30 transition-colors">
                                                         <td className="py-4 px-6"><p className="font-bold text-slate-800">{b.name}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{b.sport} • {b.platform}</p></td>
                                                         <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.motor}</td>
                                                         <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
                                                         <td className="py-4 px-6 text-sm text-slate-500">{b.display}</td>
                                                     </tr>
-                                                ))}
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan="4" className="text-center py-10 text-slate-400 italic">Aucun résultat trouvé</td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
