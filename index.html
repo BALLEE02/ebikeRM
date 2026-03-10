@@ -75,6 +75,10 @@
         const IconSearch = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
         const IconDatabase = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>;
         const IconArrowRight = ({ size = 24, className="" }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
+        const IconClose = ({ size = 24 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+        const IconCpu = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>;
+        const IconBattery = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>;
+        const IconMonitor = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/></svg>;
 
         const YEARS = [2026, 2027, 2028, 2029, 2030, 2031];
 
@@ -85,17 +89,18 @@
             
             const total26 = bikes.reduce((s, b) => s + (parseInt(b.q26) || 0), 0);
             
-            // Sauvegarde de l'URL dans le navigateur
             const handleUrlChange = (e) => {
                 setSheetUrl(e.target.value);
                 localStorage.setItem('roadmap_sheet_url', e.target.value);
             };
 
-            // Création automatique du lien d'export CSV Google
+            // Création automatique du lien d'export CSV avec gestion de l'onglet (gid)
             const exportUrl = useMemo(() => {
                 if (!sheetUrl.trim()) return null;
-                // Transforme l'URL standard en URL de téléchargement CSV
-                return sheetUrl.trim().replace(/\/edit.*$/, '/export?format=csv');
+                const matchGid = sheetUrl.match(/gid=([0-9]+)/);
+                const gidParam = matchGid ? `&gid=${matchGid[1]}` : '';
+                const baseUrl = sheetUrl.split('/edit')[0];
+                return `${baseUrl}/export?format=csv${gidParam}`;
             }, [sheetUrl]);
 
             // Import local du fichier téléchargé
@@ -108,7 +113,7 @@
                         const data = parseCSV(event.target.result);
                         if (data && data.length > 0) {
                             onUpload(data);
-                            setStatus({ type: 'success', msg: `${data.length} vélos mis à jour avec succès !` });
+                            setStatus({ type: 'success', msg: `${data.length} vélos mis à jour et sauvegardés !` });
                         } else {
                             setStatus({ type: 'error', msg: "Format non reconnu." });
                         }
@@ -117,6 +122,22 @@
                     }
                 };
                 reader.readAsText(file, 'UTF-8'); 
+            };
+
+            // Charger depuis le fichier distant bdd.csv sur GitHub Pages
+            const loadSharedBase = async () => {
+                try {
+                    const res = await fetch('./bdd.csv');
+                    if (!res.ok) throw new Error("Aucun fichier bdd.csv trouvé sur le serveur.");
+                    const text = await res.text();
+                    const data = parseCSV(text);
+                    if (data && data.length > 0) {
+                        onUpload(data);
+                        setStatus({ type: 'success', msg: `${data.length} vélos chargés depuis la base commune (bdd.csv).` });
+                    }
+                } catch (err) {
+                    setStatus({ type: 'error', msg: err.message });
+                }
             };
 
             return (
@@ -130,19 +151,22 @@
                     
                     <h1 className="text-2xl font-bold mb-6">Tableau de bord</h1>
 
-                    {/* Bloc de synchronisation via Session Active */}
+                    {/* Bloc de synchronisation */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                                <IconDatabase size={20} className="text-blue-500" /> Source : Google Sheets Entreprise
+                                <IconDatabase size={20} className="text-blue-500" /> Source de données
                             </h2>
+                            <button onClick={loadSharedBase} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2">
+                                <IconDatabase size={14} /> Charger la base commune (bdd.csv)
+                            </button>
                         </div>
                         
                         <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 mb-2">
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">1. Lien de votre document</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">1. Lien Google Sheets (URL avec l'onglet spécifique ouvert)</label>
                             <input 
                                 type="text" 
-                                placeholder="Collez l'URL de votre fichier (ex: https://docs.google.com/spreadsheets/.../edit)" 
+                                placeholder="Collez l'URL de votre fichier (ex: https://docs.google.com/spreadsheets/.../edit#gid=123456)" 
                                 className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-6 shadow-sm" 
                                 value={sheetUrl} 
                                 onChange={handleUrlChange} 
@@ -152,8 +176,8 @@
                                 {/* ETAPE 1 */}
                                 <div className="flex-1 w-full bg-white p-5 rounded-lg border border-slate-200 flex flex-col items-center text-center shadow-sm">
                                     <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold mb-3">1</div>
-                                    <p className="text-sm font-bold text-slate-800 mb-1">Générer les données</p>
-                                    <p className="text-xs text-slate-500 mb-4 h-8">Utilise votre session Google active pour extraire les données sécurisées.</p>
+                                    <p className="text-sm font-bold text-slate-800 mb-1">Générer le CSV</p>
+                                    <p className="text-xs text-slate-500 mb-4 h-8">Télécharge l'onglet sélectionné grâce à votre session.</p>
                                     
                                     {exportUrl ? (
                                         <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2 shadow-sm w-full justify-center">
@@ -171,11 +195,11 @@
                                 {/* ETAPE 2 */}
                                 <div className="flex-1 w-full bg-white p-5 rounded-lg border border-slate-200 flex flex-col items-center text-center shadow-sm">
                                     <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center font-bold mb-3">2</div>
-                                    <p className="text-sm font-bold text-slate-800 mb-1">Mettre à jour le tableau</p>
-                                    <p className="text-xs text-slate-500 mb-4 h-8">Importez le fichier CSV fraîchement téléchargé.</p>
+                                    <p className="text-sm font-bold text-slate-800 mb-1">Injecter & Sauvegarder</p>
+                                    <p className="text-xs text-slate-500 mb-4 h-8">Importez le fichier pour l'enregistrer dans votre cache.</p>
                                     
                                     <label className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm cursor-pointer w-full justify-center">
-                                        <IconUpload size={18} /> Importer le fichier
+                                        <IconUpload size={18} /> Mettre à jour la base
                                         <input type="file" accept=".csv" onChange={handleFile} className="hidden" />
                                     </label>
                                 </div>
@@ -197,20 +221,194 @@
                             <h3 className="text-4xl font-black text-amber-500 mt-2">{new Set(bikes.map(b => b.motor)).size}</h3>
                         </div>
                     </div>
+                </div>
+            );
+        };
+
+        // --- VUE BASE VÉLOS ET ID CARD ---
+        const ListAndIdCardView = ({ bikes }) => {
+            const [selectedBike, setSelectedBike] = useState(null);
+
+            return (
+                <div className="space-y-6 animate-fadeIn">
+                    <div className="p-6 bg-white rounded-2xl shadow-sm border border-slate-200 border-b border-slate-100">
+                        <h2 className="text-lg font-bold text-slate-800">Base Vélos Complète</h2>
+                        <p className="text-xs text-slate-500 mt-1">Cliquez sur une ligne pour afficher l'ID Card détaillée du E-Kit.</p>
+                    </div>
+
+                    {/* MODAL ID CARD */}
+                    {selectedBike && (
+                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={() => setSelectedBike(null)}>
+                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200" onClick={e => e.stopPropagation()}>
+                                <div className="bg-slate-900 px-8 py-6 text-white flex justify-between items-start">
+                                    <div>
+                                        <span className="bg-blue-600 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 inline-block">{selectedBike.sport}</span>
+                                        <h2 className="text-3xl font-black tracking-tight leading-none mb-2">{selectedBike.name}</h2>
+                                        <p className="text-slate-400 font-medium">Plateforme : <span className="text-white">{selectedBike.platform}</span></p>
+                                    </div>
+                                    <button onClick={() => setSelectedBike(null)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                                        <IconClose size={24} />
+                                    </button>
+                                </div>
+                                
+                                <div className="p-8">
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-2">Composition E-Kit</h3>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
+                                            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconCpu size={24} /></div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Motorisation</p>
+                                            <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.motor}</p>
+                                        </div>
+                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
+                                            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconBattery size={24} /></div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Batterie</p>
+                                            <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.battery}</p>
+                                        </div>
+                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
+                                            <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconMonitor size={24} /></div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Display / HMI</p>
+                                            <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.display}</p>
+                                        </div>
+                                    </div>
+
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Cycle de vie & Quantités (Volumes)</h3>
+                                    <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-100 flex items-center justify-between">
+                                        <div className="text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">SOP</p>
+                                            <p className="font-black text-xl text-slate-800">{selectedBike.startYear}</p>
+                                        </div>
+                                        <div className="h-px bg-blue-200 flex-1 mx-6 relative">
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-blue-200 px-3 py-1 rounded-full text-xs font-bold text-blue-600">
+                                                {YEARS.reduce((s, y) => s + (selectedBike[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()} unités totales
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">EOP</p>
+                                            <p className="font-black text-xl text-slate-800">{selectedBike.endYear}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                <tr>
+                                    <th className="py-4 px-6">Modèle & Segment</th>
+                                    <th className="py-4 px-6">E-Kit (Moteur)</th>
+                                    <th className="py-4 px-6">Batterie</th>
+                                    <th className="py-4 px-6 text-right">Vol. Total</th>
+                                    <th className="py-4 px-6 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {bikes.map(b => (
+                                    <tr key={b.id} onClick={() => setSelectedBike(b)} className="border-b border-slate-50 hover:bg-blue-50/50 transition-colors cursor-pointer group">
+                                        <td className="py-4 px-6">
+                                            <p className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{b.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{b.sport} • {b.platform}</p>
+                                        </td>
+                                        <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.motor}</td>
+                                        <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
+                                        <td className="py-4 px-6 text-sm text-slate-600 font-bold text-right">
+                                            {YEARS.reduce((s, y) => s + (b[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()}
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <button className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                Voir ID Card
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- VUE PROJECTIONS (RÉPARÉE) ---
+        const ProjectionsView = ({ bikes }) => {
+            const [type, setType] = useState('motor'); // 'motor', 'battery', 'display'
+            
+            const aggregated = useMemo(() => {
+                const agg = {};
+                bikes.forEach(b => {
+                    const ref = b[type] || 'Inconnu';
+                    if (!agg[ref]) agg[ref] = { ref, q26: 0, q27: 0, q28: 0, q29: 0, q30: 0, q31: 0 };
+                    YEARS.forEach(y => {
+                        const key = `q${y.toString().slice(-2)}`;
+                        agg[ref][key] += b[key] || 0;
+                    });
+                });
+                return Object.values(agg).sort((a,b) => {
+                    const sumA = YEARS.reduce((s, y) => s + a[`q${y.toString().slice(-2)}`], 0);
+                    const sumB = YEARS.reduce((s, y) => s + b[`q${y.toString().slice(-2)}`], 0);
+                    return sumB - sumA;
+                });
+            }, [bikes, type]);
+
+            const max = Math.max(...aggregated.flatMap(d => YEARS.map(y => d[`q${y.toString().slice(-2)}`])), 1);
+
+            return (
+                <div className="space-y-6 animate-fadeIn">
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-2xl font-bold">Projections Quantités</h1>
+                        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex">
+                            {['motor', 'battery', 'display'].map(t => (
+                                <button key={t} onClick={() => setType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${type === t ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    {t === 'motor' ? 'Moteurs' : t === 'battery' ? 'Batteries' : 'Displays (HMI)'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
                     <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                        <h2 className="text-lg font-bold mb-6">Répartition par Segment (2026)</h2>
-                        <div className="flex flex-col gap-6">
-                            {total26 > 0 ? (
-                                <div className="h-10 w-full bg-slate-100 rounded-full flex overflow-hidden shadow-inner">
-                                    {[...new Set(bikes.map(b => b.sport))].map((s, i) => {
-                                        const vol = bikes.filter(b => b.sport === s).reduce((sum, b) => sum + (parseInt(b.q26) || 0), 0);
-                                        if (vol <= 0) return null;
-                                        const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500'];
-                                        return <div key={s} style={{ width: `${(vol/total26)*100}%` }} className={`${colors[i % colors.length]} hover:brightness-110 transition-all`} title={`${s}: ${vol.toLocaleString()}`} />
+                        {/* Graphique */}
+                        <div className="h-64 flex items-end gap-4 mb-10 border-b border-slate-100 pb-2">
+                            {YEARS.map(y => {
+                                const key = `q${y.toString().slice(-2)}`;
+                                const totalYear = aggregated.reduce((s, d) => s + d[key], 0);
+                                const h = (totalYear / (max * 1.5)) * 100;
+                                return (
+                                    <div key={y} className="flex-1 flex flex-col items-center gap-2 group relative">
+                                        <div className="absolute -top-8 text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">{totalYear.toLocaleString()}</div>
+                                        <div className="w-full bg-blue-500/10 rounded-t-xl overflow-hidden flex flex-col justify-end h-full">
+                                            <div className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 hover:brightness-110" style={{ height: `${Math.max(h, 2)}%` }} />
+                                        </div>
+                                        <span className="text-xs font-bold text-slate-400">{y}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                       
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                        <th className="py-4 px-2">Référence Component</th>
+                                        {YEARS.map(y => <th key={y} className="py-4 px-2 text-right">{y}</th>)}
+                                        <th className="py-4 px-2 text-right text-blue-600">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {aggregated.map((row, i) => {
+                                        const rowTotal = YEARS.reduce((s, y) => s + row[`q${y.toString().slice(-2)}`], 0);
+                                        if (rowTotal === 0) return null;
+                                        return (
+                                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                                <td className="py-4 px-2 font-bold text-slate-700">{row.ref}</td>
+                                                {YEARS.map(y => <td key={y} className="py-4 px-2 text-right text-sm text-slate-600 font-medium">{row[`q${y.toString().slice(-2)}`].toLocaleString()}</td>)}
+                                                <td className="py-4 px-2 text-right text-sm text-blue-600 font-black">{rowTotal.toLocaleString()}</td>
+                                            </tr>
+                                        )
                                     })}
-                                </div>
-                            ) : <div className="h-10 w-full bg-slate-50 rounded-full flex items-center justify-center text-slate-400 text-sm italic border border-dashed border-slate-200">Aucun volume à afficher</div>}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -220,13 +418,24 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [searchTerm, setSearchTerm] = useState('');
-            const [bikesData, setBikesData] = useState([]);
+            
+            // Chargement initial depuis le cache local
+            const [bikesData, setBikesData] = useState(() => {
+                const cached = localStorage.getItem('roadmap_bikes_data');
+                return cached ? JSON.parse(cached) : [];
+            });
+
+            // Fonction de mise à jour (sauvegarde en cache)
+            const handleUpdateData = (data) => {
+                setBikesData(data);
+                localStorage.setItem('roadmap_bikes_data', JSON.stringify(data));
+            };
 
             const filteredBikes = useMemo(() => {
                 const term = searchTerm.trim().toLowerCase();
                 if (!term) return bikesData;
                 return bikesData.filter(b => 
-                    [b.name, b.motor, b.sport, b.platform, b.display]
+                    [b.name, b.motor, b.sport, b.platform, b.display, b.battery]
                     .some(field => (field || "").toString().toLowerCase().includes(term))
                 );
             }, [bikesData, searchTerm]);
@@ -249,7 +458,7 @@
                             })}
                         </nav>
                         <div className="p-4 border-t border-slate-800 text-center">
-                            <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Version Sans Serveur</span>
+                            <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Version Cache Local</span>
                         </div>
                     </aside>
 
@@ -257,7 +466,7 @@
                         <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-10 shadow-sm">
                             <div className="relative w-96">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><IconSearch /></div>
-                                <input type="text" placeholder="Chercher un vélo, un moteur..." className="w-full bg-slate-100 border-none rounded-2xl pl-12 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                <input type="text" placeholder="Chercher un vélo, un composant..." className="w-full bg-slate-100 border-none rounded-2xl pl-12 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="text-right">
@@ -272,44 +481,16 @@
                             {bikesData.length === 0 && activeTab !== 'dashboard' ? (
                                 <div className="text-center py-20 animate-fadeIn">
                                     <IconDatabase size={48} className="mx-auto text-slate-300 mb-4" />
-                                    <h2 className="text-xl font-bold text-slate-500">Aucune donnée chargée.</h2>
+                                    <h2 className="text-xl font-bold text-slate-500">Aucune donnée en cache.</h2>
                                     <button onClick={() => setActiveTab('dashboard')} className="mt-6 text-blue-600 font-bold hover:underline">Aller au Dashboard pour charger les données</button>
                                 </div>
                             ) : (
                                 <>
-                                    {activeTab === 'dashboard' && <DashboardView bikes={filteredBikes} onUpload={setBikesData} />}
+                                    {activeTab === 'dashboard' && <DashboardView bikes={filteredBikes} onUpload={handleUpdateData} />}
                                     
-                                    {activeTab === 'list' && (
-                                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fadeIn">
-                                            <div className="p-6 border-b border-slate-100"><h2 className="text-lg font-bold text-slate-800">Base Vélos Complète</h2></div>
-                                            <table className="w-full text-left">
-                                                <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                                    <tr><th className="py-4 px-6">Vélo</th><th className="py-4 px-6">E-Kit (Moteur)</th><th className="py-4 px-6">Batterie</th><th className="py-4 px-6">Display / HMI</th><th className="py-4 px-6">SOP</th></tr>
-                                                </thead>
-                                                <tbody>
-                                                    {filteredBikes.map(b => (
-                                                        <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                                                            <td className="py-4 px-6"><p className="font-bold text-slate-800">{b.name}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{b.sport} • {b.platform}</p></td>
-                                                            <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.motor}</td>
-                                                            <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
-                                                            <td className="py-4 px-6 text-sm text-slate-500">{b.display}</td>
-                                                            <td className="py-4 px-6"><span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full uppercase">{b.startYear}</span></td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
+                                    {activeTab === 'list' && <ListAndIdCardView bikes={filteredBikes} />}
 
-                                    {activeTab === 'projections' && (
-                                        <div className="space-y-6 animate-fadeIn">
-                                            <h1 className="text-2xl font-bold">Projections Composants</h1>
-                                            <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center text-center">
-                                                <IconChart size={48} className="text-blue-200 mb-4" />
-                                                <h3 className="font-bold text-lg text-slate-700">Vue en cours de développement</h3>
-                                            </div>
-                                        </div>
-                                    )}
+                                    {activeTab === 'projections' && <ProjectionsView bikes={filteredBikes} />}
 
                                     {activeTab === 'roadmap' && (
                                         <div className="space-y-6 animate-fadeIn">
