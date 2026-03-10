@@ -33,7 +33,8 @@
                     name: obj['BIKES'] || obj['Bikes name'] || obj['CC Name'] || obj['Bikes name\nEcosystem name'] || "Modèle Inconnu",
                     sport: obj['Sport'] || obj['Segment'] || "N/A",
                     platform: obj['Plateform'] || obj['PLATFORM ICO'] || obj['Plateforme'] || "N/A",
-                    motor: obj['EBOOST ekit'] || obj['Motor'] || obj['EBOOST (E-KIT) NAME ICO'] || obj['EBOOST (E-KIT) NAME\nICO'] || "N/A",
+                    // ekit remplace motor (conservation de motor pour rétrocompatibilité du cache si besoin)
+                    ekit: obj['EBOOST ekit'] || obj['Motor'] || obj['EBOOST (E-KIT) NAME ICO'] || obj['EBOOST (E-KIT) NAME\nICO'] || "N/A",
                     battery: obj['Battery'] || obj['BATTERY'] || "N/A",
                     display: obj['Cockpit/IHM'] || obj['Display'] || obj['DISPLAY'] || "N/A",
                     startYear: parseInt(obj['Start date']?.toString().split('/').pop()) || 2026,
@@ -223,16 +224,76 @@
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
                             <p className="text-slate-500 text-xs font-bold uppercase">E-Kits distincts</p>
-                            <h3 className="text-4xl font-black text-amber-500 mt-2">{new Set(bikes.map(b => b.motor)).size}</h3>
+                            <h3 className="text-4xl font-black text-amber-500 mt-2">{new Set(bikes.map(b => b.ekit || b.motor)).size}</h3>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        // --- VUE BASE VÉLOS ET ID CARD (AVEC TRI) ---
-        const ListAndIdCardView = ({ bikes }) => {
-            const [selectedBike, setSelectedBike] = useState(null);
+        // --- COMPOSANT ID CARD MODAL (Sorti de la hiérarchie transform pour éviter le bug CSS de position fixed) ---
+        const BikeIdCardModal = ({ selectedBike, onClose }) => {
+            if (!selectedBike) return null;
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={onClose}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-fadeIn" onClick={e => e.stopPropagation()}>
+                        <div className="bg-slate-900 px-8 py-6 text-white flex justify-between items-start">
+                            <div>
+                                <span className="bg-blue-600 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 inline-block">{selectedBike.sport}</span>
+                                <h2 className="text-3xl font-black tracking-tight leading-none mb-2">{selectedBike.name}</h2>
+                                <p className="text-slate-400 font-medium">Plateforme : <span className="text-white">{selectedBike.platform}</span></p>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                                <IconClose size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-8">
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-2">Composition E-Kit</h3>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
+                                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconCpu size={24} /></div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400">E-Kit</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.ekit || selectedBike.motor}</p>
+                                </div>
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
+                                    <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconBattery size={24} /></div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400">Batterie</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.battery}</p>
+                                </div>
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
+                                    <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconMonitor size={24} /></div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400">Display / HMI</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.display}</p>
+                                </div>
+                            </div>
+
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Cycle de vie & Quantités (Volumes)</h3>
+                            <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-100 flex items-center justify-between">
+                                <div className="text-center">
+                                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">SOP</p>
+                                    <p className="font-black text-xl text-slate-800">{selectedBike.startYear}</p>
+                                </div>
+                                <div className="h-px bg-blue-200 flex-1 mx-6 relative">
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-blue-200 px-3 py-1 rounded-full text-xs font-bold text-blue-600">
+                                        {YEARS.reduce((s, y) => s + (selectedBike[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()} unités totales
+                                    </div>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">EOP</p>
+                                    <p className="font-black text-xl text-slate-800">{selectedBike.endYear}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- VUE BASE VÉLOS ---
+        const ListAndIdCardView = ({ bikes, onSelectBike }) => {
             const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
 
             const requestSort = (key) => {
@@ -254,8 +315,11 @@
                         aVal = a.startYear || 0;
                         bVal = b.startYear || 0;
                     } else {
-                        aVal = (a[sortConfig.key] || '').toString().toLowerCase();
-                        bVal = (b[sortConfig.key] || '').toString().toLowerCase();
+                        // Utilise ekit si le tri est sur ekit
+                        const keyA = sortConfig.key === 'ekit' ? (a.ekit || a.motor) : a[sortConfig.key];
+                        const keyB = sortConfig.key === 'ekit' ? (b.ekit || b.motor) : b[sortConfig.key];
+                        aVal = (keyA || '').toString().toLowerCase();
+                        bVal = (keyB || '').toString().toLowerCase();
                     }
                     
                     if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -275,63 +339,6 @@
                         <div className="text-sm text-slate-500 font-medium">{sortedBikes.length} résultats</div>
                     </div>
 
-                    {/* MODAL ID CARD */}
-                    {selectedBike && (
-                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={() => setSelectedBike(null)}>
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200" onClick={e => e.stopPropagation()}>
-                                <div className="bg-slate-900 px-8 py-6 text-white flex justify-between items-start">
-                                    <div>
-                                        <span className="bg-blue-600 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 inline-block">{selectedBike.sport}</span>
-                                        <h2 className="text-3xl font-black tracking-tight leading-none mb-2">{selectedBike.name}</h2>
-                                        <p className="text-slate-400 font-medium">Plateforme : <span className="text-white">{selectedBike.platform}</span></p>
-                                    </div>
-                                    <button onClick={() => setSelectedBike(null)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
-                                        <IconClose size={24} />
-                                    </button>
-                                </div>
-                                
-                                <div className="p-8">
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-2">Composition E-Kit</h3>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
-                                            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconCpu size={24} /></div>
-                                            <p className="text-[10px] uppercase font-bold text-slate-400">E-Kit</p>
-                                            <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.motor}</p>
-                                        </div>
-                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
-                                            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconBattery size={24} /></div>
-                                            <p className="text-[10px] uppercase font-bold text-slate-400">Batterie</p>
-                                            <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.battery}</p>
-                                        </div>
-                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
-                                            <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconMonitor size={24} /></div>
-                                            <p className="text-[10px] uppercase font-bold text-slate-400">Display / HMI</p>
-                                            <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.display}</p>
-                                        </div>
-                                    </div>
-
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Cycle de vie & Quantités (Volumes)</h3>
-                                    <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-100 flex items-center justify-between">
-                                        <div className="text-center">
-                                            <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">SOP</p>
-                                            <p className="font-black text-xl text-slate-800">{selectedBike.startYear}</p>
-                                        </div>
-                                        <div className="h-px bg-blue-200 flex-1 mx-6 relative">
-                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-blue-200 px-3 py-1 rounded-full text-xs font-bold text-blue-600">
-                                                {YEARS.reduce((s, y) => s + (selectedBike[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()} unités totales
-                                            </div>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">EOP</p>
-                                            <p className="font-black text-xl text-slate-800">{selectedBike.endYear}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
@@ -339,8 +346,8 @@
                                     <th className="py-4 px-6 cursor-pointer hover:bg-slate-200 transition-colors select-none" onClick={() => requestSort('name')}>
                                         Modèle & Segment {sortConfig.key === 'name' && <IconSort direction={sortConfig.direction} />}
                                     </th>
-                                    <th className="py-4 px-6 cursor-pointer hover:bg-slate-200 transition-colors select-none" onClick={() => requestSort('motor')}>
-                                        E-Kit (Moteur) {sortConfig.key === 'motor' && <IconSort direction={sortConfig.direction} />}
+                                    <th className="py-4 px-6 cursor-pointer hover:bg-slate-200 transition-colors select-none" onClick={() => requestSort('ekit')}>
+                                        E-Kit {sortConfig.key === 'ekit' && <IconSort direction={sortConfig.direction} />}
                                     </th>
                                     <th className="py-4 px-6 cursor-pointer hover:bg-slate-200 transition-colors select-none" onClick={() => requestSort('battery')}>
                                         Batterie {sortConfig.key === 'battery' && <IconSort direction={sortConfig.direction} />}
@@ -355,12 +362,12 @@
                             </thead>
                             <tbody>
                                 {sortedBikes.map(b => (
-                                    <tr key={b.id} onClick={() => setSelectedBike(b)} className="border-b border-slate-50 hover:bg-blue-50/50 transition-colors cursor-pointer group">
+                                    <tr key={b.id} onClick={() => onSelectBike(b)} className="border-b border-slate-50 hover:bg-blue-50/50 transition-colors cursor-pointer group">
                                         <td className="py-4 px-6">
                                             <p className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{b.name}</p>
                                             <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{b.sport} • {b.platform}</p>
                                         </td>
-                                        <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.motor}</td>
+                                        <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.ekit || b.motor}</td>
                                         <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
                                         <td className="py-4 px-6 text-center">
                                             <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full uppercase">{b.startYear}</span>
@@ -377,14 +384,16 @@
             );
         };
 
-        // --- VUE PROJECTIONS (RÉPARÉE) ---
+        // --- VUE PROJECTIONS (GRAPHIQUE RÉPARÉ ET LABEL E-KIT) ---
         const ProjectionsView = ({ bikes }) => {
-            const [type, setType] = useState('motor'); // 'motor', 'battery', 'display'
+            const [type, setType] = useState('ekit'); // 'ekit', 'battery', 'display'
             
             const aggregated = useMemo(() => {
                 const agg = {};
                 bikes.forEach(b => {
-                    const ref = b[type] || 'Inconnu';
+                    // Utilise ekit si demandé, en fallback sur motor pour la rétrocompatibilité du cache
+                    const valType = type === 'ekit' ? (b.ekit || b.motor) : b[type];
+                    const ref = valType || 'Inconnu';
                     if (!agg[ref]) agg[ref] = { ref, q26: 0, q27: 0, q28: 0, q29: 0, q30: 0, q31: 0 };
                     YEARS.forEach(y => {
                         const key = `q${y.toString().slice(-2)}`;
@@ -398,10 +407,10 @@
                 });
             }, [bikes, type]);
 
-            // Fix du bug: on calcule le maximum des totaux ANNUELS (et non le max d'un composant) pour que le graphique soit bien proportionné
+            // Correction du calcul de la hauteur pour le graphique
             const maxYearlyTotal = useMemo(() => {
                 const totals = YEARS.map(y => aggregated.reduce((s, d) => s + (d[`q${y.toString().slice(-2)}`] || 0), 0));
-                return Math.max(...totals, 1);
+                return Math.max(...totals, 1); // evite la division par zéro
             }, [aggregated]);
 
             return (
@@ -409,32 +418,37 @@
                     <div className="flex justify-between items-center">
                         <h1 className="text-2xl font-bold">Projections Quantités</h1>
                         <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex">
-                            {['motor', 'battery', 'display'].map(t => (
+                            {['ekit', 'battery', 'display'].map(t => (
                                 <button key={t} onClick={() => setType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${type === t ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-                                    {t === 'motor' ? 'E-Kits' : t === 'battery' ? 'Batteries' : 'Displays (HMI)'}
+                                    {t === 'ekit' ? 'E-Kits' : t === 'battery' ? 'Batteries' : 'Displays (HMI)'}
                                 </button>
                             ))}
                         </div>
                     </div>
 
                     <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                        {/* Graphique réparé avec des hauteurs fixes */}
-                        <div className="h-72 flex items-end gap-4 mb-10 border-b border-slate-100 pb-2 mt-6">
+                        {/* Graphique réparé avec structure correcte pour le CSS */}
+                        <div className="h-64 flex items-end gap-4 mb-10 border-b border-slate-100 pb-2 mt-6">
                             {YEARS.map(y => {
                                 const key = `q${y.toString().slice(-2)}`;
                                 const totalYear = aggregated.reduce((s, d) => s + (d[key] || 0), 0);
-                                const h = (totalYear / maxYearlyTotal) * 100;
+                                const heightPercent = maxYearlyTotal > 0 ? (totalYear / maxYearlyTotal) * 100 : 0;
                                 
                                 return (
                                     <div key={y} className="flex-1 h-full flex flex-col justify-end items-center gap-2 group relative">
-                                        <div className="w-full bg-slate-50 rounded-t-xl flex flex-col justify-end h-full relative">
-                                            <div className="w-full bg-blue-600 rounded-t-xl transition-all duration-700 hover:brightness-110 relative" style={{ height: `${h}%`, minHeight: totalYear > 0 ? '4px' : '0' }}>
+                                        {/* Container strict pour la hauteur du composant bar */}
+                                        <div className="w-full bg-slate-50 rounded-t-xl h-full flex flex-col justify-end mt-4 relative">
+                                            <div 
+                                                className="w-full bg-blue-600 rounded-t-xl transition-all duration-700 hover:brightness-110 relative" 
+                                                style={{ height: `${Math.max(heightPercent, totalYear > 0 ? 2 : 0)}%` }}
+                                            >
+                                                {/* Tooltip au-dessus de la barre */}
                                                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity bg-white px-2 py-1 rounded shadow-md whitespace-nowrap z-10 pointer-events-none border border-blue-100">
                                                     {totalYear.toLocaleString()}
                                                 </div>
                                             </div>
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 mt-1">{y}</span>
+                                        <span className="text-xs font-bold text-slate-400">{y}</span>
                                     </div>
                                 );
                             })}
@@ -473,31 +487,30 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [searchTerm, setSearchTerm] = useState('');
-            const [selectedSport, setSelectedSport] = useState('All'); // Filtre Sport Global
+            const [selectedSport, setSelectedSport] = useState('All'); 
             
-            // Chargement initial depuis le cache local
+            // État pour afficher la popup Modal (au niveau racine de l'app)
+            const [selectedBike, setSelectedBike] = useState(null);
+            
             const [bikesData, setBikesData] = useState(() => {
                 const cached = localStorage.getItem('roadmap_bikes_data');
                 return cached ? JSON.parse(cached) : [];
             });
 
-            // Fonction de mise à jour (sauvegarde en cache)
             const handleUpdateData = (data) => {
                 setBikesData(data);
                 localStorage.setItem('roadmap_bikes_data', JSON.stringify(data));
             };
 
-            // Liste des sports uniques pour le menu déroulant
             const sportsList = useMemo(() => {
                 const sp = new Set(bikesData.map(b => b.sport).filter(s => s && s !== 'N/A'));
                 return Array.from(sp).sort();
             }, [bikesData]);
 
-            // Filtrage global de la donnée
             const filteredBikes = useMemo(() => {
                 const term = searchTerm.trim().toLowerCase();
                 return bikesData.filter(b => {
-                    const matchSearch = !term || [b.name, b.motor, b.sport, b.platform, b.display, b.battery].some(field => (field || "").toString().toLowerCase().includes(term));
+                    const matchSearch = !term || [b.name, b.ekit, b.motor, b.sport, b.platform, b.display, b.battery].some(field => (field || "").toString().toLowerCase().includes(term));
                     const matchSport = selectedSport === 'All' || b.sport === selectedSport;
                     return matchSearch && matchSport;
                 });
@@ -528,7 +541,6 @@
                     <div className="flex-1 ml-64 flex flex-col">
                         <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-10 shadow-sm">
                             
-                            {/* Filtres Globaux de l'application */}
                             <div className="flex gap-4 w-full max-w-2xl">
                                 <div className="relative flex-1">
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><IconSearch /></div>
@@ -564,7 +576,7 @@
                                 <>
                                     {activeTab === 'dashboard' && <DashboardView bikes={filteredBikes} onUpload={handleUpdateData} />}
                                     
-                                    {activeTab === 'list' && <ListAndIdCardView bikes={filteredBikes} />}
+                                    {activeTab === 'list' && <ListAndIdCardView bikes={filteredBikes} onSelectBike={setSelectedBike} />}
 
                                     {activeTab === 'projections' && <ProjectionsView bikes={filteredBikes} />}
 
@@ -602,6 +614,10 @@
                             )}
                         </main>
                     </div>
+
+                    {/* ID Card Modal rendu au plus haut niveau pour éviter les problèmes de superposition / CSS Transform */}
+                    <BikeIdCardModal selectedBike={selectedBike} onClose={() => setSelectedBike(null)} />
+
                 </div>
             );
         };
@@ -610,8 +626,9 @@
         root.render(<App />);
     </script>
     <style>
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+        /* Modification pour la Modal : on n'applique pas de CSS Transform qui dérègle le "position: fixed" */
+        @keyframes fadeInOpacityOnly { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fadeIn { animation: fadeInOpacityOnly 0.3s ease-out forwards; }
     </style>
 </body>
 </html>
