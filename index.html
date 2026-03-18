@@ -15,53 +15,180 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // --- MOTEUR DE TRAITEMENT DES DONNÉES ---
-        const processBikesData = (headers, rows) => {
-            return rows.map((values, index) => {
-                const obj = {};
-                headers.forEach((header, i) => {
-                    let val = values[i] || "";
-                    if (header.toLowerCase().includes('qty') || header.toLowerCase().includes('20') || /^\d{4}$/.test(header)) {
-                        const cleanVal = val.toString().replace(/[\s\u00A0\u202F]/g, '').replace(',', '.');
-                        val = Math.round(parseFloat(cleanVal)) || 0;
-                    }
-                    obj[header] = val;
-                });
+        // --- MOTEUR INTELLIGENT DE TRAITEMENT DES DONNÉES ---
+        const processBikesData = (allRows) => {
+            // 1. Détection automatique de la vraie ligne d'en-tête (contourne les notes en haut de fichier)
+            let headerRowIndex = 0;
+            let bestScore = 0;
+            
+            for (let i = 0; i < Math.min(10, allRows.length); i++) {
+                const rowStr = allRows[i].join(' ').toLowerCase();
+                let score = 0;
+                if (rowStr.includes('sport') || rowStr.includes('segment')) score++;
+                if (rowStr.includes('qty') || rowStr.includes('2026') || rowStr.includes('2027')) score++;
+                if (rowStr.includes('name') || rowStr.includes('modèle') || rowStr.includes('component')) score++;
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    headerRowIndex = i;
+                }
+            }
 
-                return {
-                    id: `bike-${index}-${Date.now()}`,
-                    name: obj['BIKES'] || obj['Bikes name'] || obj['CC Name'] || obj['Bikes name\nEcosystem name'] || "Modèle Inconnu",
-                    sport: obj['Sport'] || obj['Segment'] || "N/A",
-                    platform: obj['Plateform'] || obj['PLATFORM ICO'] || obj['Plateforme'] || "N/A",
-                    // ekit remplace motor (conservation de motor pour rétrocompatibilité du cache si besoin)
-                    ekit: obj['EBOOST ekit'] || obj['Motor'] || obj['EBOOST (E-KIT) NAME ICO'] || obj['EBOOST (E-KIT) NAME\nICO'] || "N/A",
-                    battery: obj['Battery'] || obj['BATTERY'] || "N/A",
-                    display: obj['Cockpit/IHM'] || obj['Display'] || obj['DISPLAY'] || "N/A",
-                    startYear: parseInt(obj['Start date']?.toString().split('/').pop()) || 2026,
-                    endYear: parseInt(obj['End date']?.toString().split('/').pop()) || 2031,
-                    q26: obj['Qty 2026'] || obj['2026'] || 0,
-                    q27: obj['Qty 2027'] || obj['2027'] || 0,
-                    q28: obj['Qty 2028'] || obj['2028'] || 0,
-                    q29: obj['Qty 2029'] || obj['2029'] || 0,
-                    q30: obj['Qty 2030'] || obj['2030'] || 0,
-                    q31: obj['Qty 2031'] || obj['2031'] || 0
-                };
+            const headers = allRows[headerRowIndex].map(h => (h || "").toLowerCase().trim().replace(/[\n\r]/g, ' '));
+            const dataRows = allRows.slice(headerRowIndex + 1);
+
+            // 2. Recherche par mots-clés des colonnes importantes (Fuzzy Matching)
+            const findColIndex = (keywords) => {
+                for (let kw of keywords) {
+                    const idx = headers.findIndex(h => h.includes(kw));
+                    if (idx !== -1) return idx;
+                }
+                return -1;
+            };
+
+            const idxName = findColIndex(['bikes name', 'eboost name', 'bike', 'vélo', 'cc name', 'ecosystem', 'modèle', 'cc']);
+            const idxSport = findColIndex(['sport', 'segment', 'famille']);
+            const idxPlatform = findColIndex(['platform', 'plateform', 'plateforme']);
+            const idxMotorCol = findColIndex(['eboost ekit', 'motor', 'ekit', 'e-kit', 'assistance']);
+            const idxBatteryCol = findColIndex(['battery', 'batterie', 'energy']);
+            const idxDisplayCol = findColIndex(['display', 'cockpit', 'ihm', 'hmi', 'screen']);
+            
+            // Colonnes spécifiques au nouveau format "Pivoté" (1 ligne = 1 composant)
+            const idxCompType = findColIndex(['component type', 'type de composant']);
+            const idxCompName = findColIndex(['component name', 'nom du composant', 'compo to consider']);
+
+            const yearIndexes = {};
+            [2026, 2027, 2028, 2029, 2030, 2031].forEach(year => {
+                let idx = headers.findIndex(h => h.includes('qty') && h.includes(year.toString()));
+                if (idx === -1) idx = headers.findIndex(h => h === year.toString() || h.includes(year.toString()));
+                if (idx !== -1) yearIndexes[year] = idx;
             });
+
+            // 3. Détermination de la structure du fichier
+            const isPivoted = idxCompType !== -1 && idxCompName !== -1;
+            
+            const getVal = (row, idx, fallback = "N/A") => {
+                if (idx === -1 || row[idx] === undefined) return fallback;
+                const val = row[idx].trim();
+                return val === '' || val === '#N/A' || val === '0' ? fallback : val;
+            };
+
+            const getNum = (row, idx) => {
+                if (idx === -1 || row[idx] === undefined) return 0;
+                const cleanVal = row[idx].toString().replace(/[\s\u00A0\u202F€$]/g, '').replace(',', '.');
+                return Math.round(parseFloat(cleanVal)) || 0;
+            };
+
+            // 4. Reconstruction des données
+            if (isPivoted) {
+                // Format Pivoté (ex: bdd.csv) : On regroupe les composants par nom de vélo
+                const bikesMap = {};
+                dataRows.forEach((row, index) => {
+                    const bikeName = getVal(row, idxName);
+                    if (bikeName === "N/A") return;
+
+                    if (!bikesMap[bikeName]) {
+                        bikesMap[bikeName] = {
+                            id: `bike-${index}-${Date.now()}`,
+                            name: bikeName,
+                            sport: getVal(row, idxSport),
+                            platform: getVal(row, idxPlatform),
+                            ekit: 'N/A', battery: 'N/A', display: 'N/A',
+                            startYear: 2026, endYear: 2031,
+                            q26: 0, q27: 0, q28: 0, q29: 0, q30: 0, q31: 0
+                        };
+                    }
+
+                    const b = bikesMap[bikeName];
+                    const compType = getVal(row, idxCompType).toLowerCase();
+                    const compName = getVal(row, idxCompName);
+
+                    if (compName !== "N/A") {
+                        if (compType.includes('battery') || compType.includes('energy')) b.battery = compName;
+                        if (compType.includes('assistance') || compType.includes('motor') || compType.includes('ekit')) b.ekit = compName;
+                        if (compType.includes('hmi') || compType.includes('display') || compType.includes('cockpit')) b.display = compName;
+                    }
+
+                    // On prend le maximum des quantités trouvées pour le même vélo (car elles sont répétées sur chaque ligne de composant)
+                    [2026, 2027, 2028, 2029, 2030, 2031].forEach(y => {
+                        const val = getNum(row, yearIndexes[y]);
+                        b[`q${y.toString().slice(-2)}`] = Math.max(b[`q${y.toString().slice(-2)}`], val);
+                    });
+                });
+                return Object.values(bikesMap).filter(b => b.q26 > 0 || b.q27 > 0 || b.q28 > 0 || b.q29 > 0 || b.q30 > 0 || b.q31 > 0 || b.ekit !== "N/A");
+            
+            } else {
+                // Format Classique (1 ligne = 1 vélo)
+                return dataRows.map((row, index) => {
+                    return {
+                        id: `bike-${index}-${Date.now()}`,
+                        name: getVal(row, idxName, "Modèle Inconnu"),
+                        sport: getVal(row, idxSport),
+                        platform: getVal(row, idxPlatform),
+                        ekit: getVal(row, idxMotorCol),
+                        battery: getVal(row, idxBatteryCol),
+                        display: getVal(row, idxDisplayCol),
+                        startYear: 2026,
+                        endYear: 2031,
+                        q26: getNum(row, yearIndexes[2026]),
+                        q27: getNum(row, yearIndexes[2027]),
+                        q28: getNum(row, yearIndexes[2028]),
+                        q29: getNum(row, yearIndexes[2029]),
+                        q30: getNum(row, yearIndexes[2030]),
+                        q31: getNum(row, yearIndexes[2031])
+                    };
+                }).filter(b => b.name !== "Modèle Inconnu" && (b.q26 > 0 || b.q27 > 0 || b.q28 > 0 || b.q29 > 0 || b.q30 > 0 || b.q31 > 0 || b.ekit !== "N/A"));
+            }
         };
 
+        // Parseur CSV robuste gérant les retours à la ligne dans les cellules
         const parseCSV = (text) => {
             try {
                 if (text.trim().toLowerCase().startsWith('<!doctype') || text.trim().toLowerCase().startsWith('<html')) {
-                    throw new Error("Erreur: Le fichier reçu est une page Web. Assurez-vous de bien charger le fichier .csv téléchargé.");
+                    throw new Error("Erreur: Le fichier reçu est une page Web HTML. Assurez-vous d'avoir téléchargé un CSV.");
                 }
-                const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-                if (lines.length < 2) throw new Error("Le fichier est vide ou mal formaté.");
-                const separator = lines[0].includes(';') ? ';' : ',';
-                const headers = lines[0].split(separator).map(h => h.trim().replace(/^[\uFEFF\u00EF\u00BB\u00BF]+/, '').replace(/"/g, ''));
-                const rows = lines.slice(1).map(line => line.split(separator).map(v => v.trim().replace(/"/g, '')));
-                return processBikesData(headers, rows);
+
+                // Détection intelligente du séparateur
+                const firstLinePreview = text.split('\n')[0] || "";
+                const secondLinePreview = text.split('\n')[1] || "";
+                const checkText = firstLinePreview + secondLinePreview;
+                const separator = (checkText.match(/;/g) || []).length > (checkText.match(/,/g) || []).length ? ';' : ',';
+
+                const result = [];
+                let currentLine = [];
+                let currentCell = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    const nextChar = text[i + 1];
+
+                    if (inQuotes) {
+                        if (char === '"') {
+                            if (nextChar === '"') { currentCell += '"'; i++; } 
+                            else { inQuotes = false; }
+                        } else { currentCell += char; }
+                    } else {
+                        if (char === '"') { inQuotes = true; } 
+                        else if (char === separator) { currentLine.push(currentCell); currentCell = ''; } 
+                        else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+                            if (char === '\r') i++;
+                            currentLine.push(currentCell);
+                            if (currentLine.join('').trim() !== '') result.push(currentLine);
+                            currentLine = []; currentCell = '';
+                        } else if (char !== '\r') { currentCell += char; }
+                    }
+                }
+                if (currentCell !== '' || currentLine.length > 0) {
+                    currentLine.push(currentCell);
+                    if (currentLine.join('').trim() !== '') result.push(currentLine);
+                }
+
+                if (result.length < 2) throw new Error("Le fichier est vide ou mal formaté.");
+                return processBikesData(result);
+
             } catch (err) {
-                console.error(err);
+                console.error("Erreur parseCSV:", err);
                 throw err;
             }
         };
@@ -100,16 +227,15 @@
                 localStorage.setItem('roadmap_sheet_url', e.target.value);
             };
 
-            // Création automatique du lien d'export CSV avec gestion de l'onglet (gid)
             const exportUrl = useMemo(() => {
                 if (!sheetUrl.trim()) return null;
+                // Détecter dynamiquement l'onglet demandé
                 const matchGid = sheetUrl.match(/gid=([0-9]+)/);
                 const gidParam = matchGid ? `&gid=${matchGid[1]}` : '';
                 const baseUrl = sheetUrl.split('/edit')[0];
                 return `${baseUrl}/export?format=csv${gidParam}`;
             }, [sheetUrl]);
 
-            // Import local du fichier téléchargé
             const handleFile = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -121,7 +247,7 @@
                             onUpload(data);
                             setStatus({ type: 'success', msg: `${data.length} vélos mis à jour et sauvegardés !` });
                         } else {
-                            setStatus({ type: 'error', msg: "Format non reconnu." });
+                            setStatus({ type: 'error', msg: "Format non reconnu. Aucune donnée n'a pu être extraite." });
                         }
                     } catch (err) { 
                         setStatus({ type: 'error', msg: err.message }); 
@@ -130,7 +256,6 @@
                 reader.readAsText(file, 'UTF-8'); 
             };
 
-            // Charger depuis le fichier distant bdd.csv sur GitHub Pages
             const loadSharedBase = async () => {
                 try {
                     const res = await fetch('./bdd.csv');
@@ -140,6 +265,8 @@
                     if (data && data.length > 0) {
                         onUpload(data);
                         setStatus({ type: 'success', msg: `${data.length} vélos chargés depuis la base commune (bdd.csv).` });
+                    } else {
+                        setStatus({ type: 'error', msg: "Le fichier bdd.csv est vide ou illisible." });
                     }
                 } catch (err) {
                     setStatus({ type: 'error', msg: err.message });
@@ -157,29 +284,27 @@
                     
                     <h1 className="text-2xl font-bold mb-6">Tableau de bord</h1>
 
-                    {/* Bloc de synchronisation */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
                                 <IconDatabase size={20} className="text-blue-500" /> Source de données
                             </h2>
-                            <button onClick={loadSharedBase} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2">
+                            <button onClick={loadSharedBase} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 shadow-sm border border-slate-200">
                                 <IconDatabase size={14} /> Charger la base commune (bdd.csv)
                             </button>
                         </div>
                         
                         <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 mb-2">
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">1. Lien Google Sheets (URL avec l'onglet spécifique ouvert)</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">1. Lien Google Sheets (Onglet cible)</label>
                             <input 
                                 type="text" 
-                                placeholder="Collez l'URL de votre fichier (ex: https://docs.google.com/spreadsheets/.../edit#gid=123456)" 
+                                placeholder="Collez l'URL complète avec le gid (ex: https://docs.google.com/spreadsheets/d/.../edit?gid=224286025)" 
                                 className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-6 shadow-sm" 
                                 value={sheetUrl} 
                                 onChange={handleUrlChange} 
                             />
 
                             <div className="flex flex-col md:flex-row gap-4 items-center">
-                                {/* ETAPE 1 */}
                                 <div className="flex-1 w-full bg-white p-5 rounded-lg border border-slate-200 flex flex-col items-center text-center shadow-sm">
                                     <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold mb-3">1</div>
                                     <p className="text-sm font-bold text-slate-800 mb-1">Générer le CSV</p>
@@ -198,7 +323,6 @@
 
                                 <IconArrowRight className="hidden md:block text-slate-300" />
 
-                                {/* ETAPE 2 */}
                                 <div className="flex-1 w-full bg-white p-5 rounded-lg border border-slate-200 flex flex-col items-center text-center shadow-sm">
                                     <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center font-bold mb-3">2</div>
                                     <p className="text-sm font-bold text-slate-800 mb-1">Injecter & Sauvegarder</p>
@@ -224,14 +348,14 @@
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
                             <p className="text-slate-500 text-xs font-bold uppercase">E-Kits distincts</p>
-                            <h3 className="text-4xl font-black text-amber-500 mt-2">{new Set(bikes.map(b => b.ekit || b.motor)).size}</h3>
+                            <h3 className="text-4xl font-black text-amber-500 mt-2">{new Set(bikes.map(b => b.ekit)).size}</h3>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        // --- COMPOSANT ID CARD MODAL (Sorti de la hiérarchie transform pour éviter le bug CSS de position fixed) ---
+        // --- COMPOSANT ID CARD MODAL ---
         const BikeIdCardModal = ({ selectedBike, onClose }) => {
             if (!selectedBike) return null;
 
@@ -256,7 +380,7 @@
                                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
                                     <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconCpu size={24} /></div>
                                     <p className="text-[10px] uppercase font-bold text-slate-400">E-Kit</p>
-                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.ekit || selectedBike.motor}</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.ekit}</p>
                                 </div>
                                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
                                     <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconBattery size={24} /></div>
@@ -315,11 +439,8 @@
                         aVal = a.startYear || 0;
                         bVal = b.startYear || 0;
                     } else {
-                        // Utilise ekit si le tri est sur ekit
-                        const keyA = sortConfig.key === 'ekit' ? (a.ekit || a.motor) : a[sortConfig.key];
-                        const keyB = sortConfig.key === 'ekit' ? (b.ekit || b.motor) : b[sortConfig.key];
-                        aVal = (keyA || '').toString().toLowerCase();
-                        bVal = (keyB || '').toString().toLowerCase();
+                        aVal = (a[sortConfig.key] || '').toString().toLowerCase();
+                        bVal = (b[sortConfig.key] || '').toString().toLowerCase();
                     }
                     
                     if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -367,7 +488,7 @@
                                             <p className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{b.name}</p>
                                             <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{b.sport} • {b.platform}</p>
                                         </td>
-                                        <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.ekit || b.motor}</td>
+                                        <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.ekit}</td>
                                         <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
                                         <td className="py-4 px-6 text-center">
                                             <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full uppercase">{b.startYear}</span>
@@ -384,16 +505,14 @@
             );
         };
 
-        // --- VUE PROJECTIONS (GRAPHIQUE RÉPARÉ ET LABEL E-KIT) ---
+        // --- VUE PROJECTIONS ---
         const ProjectionsView = ({ bikes }) => {
             const [type, setType] = useState('ekit'); // 'ekit', 'battery', 'display'
             
             const aggregated = useMemo(() => {
                 const agg = {};
                 bikes.forEach(b => {
-                    // Utilise ekit si demandé, en fallback sur motor pour la rétrocompatibilité du cache
-                    const valType = type === 'ekit' ? (b.ekit || b.motor) : b[type];
-                    const ref = valType || 'Inconnu';
+                    const ref = b[type] || 'Inconnu';
                     if (!agg[ref]) agg[ref] = { ref, q26: 0, q27: 0, q28: 0, q29: 0, q30: 0, q31: 0 };
                     YEARS.forEach(y => {
                         const key = `q${y.toString().slice(-2)}`;
@@ -407,10 +526,9 @@
                 });
             }, [bikes, type]);
 
-            // Correction du calcul de la hauteur pour le graphique
             const maxYearlyTotal = useMemo(() => {
                 const totals = YEARS.map(y => aggregated.reduce((s, d) => s + (d[`q${y.toString().slice(-2)}`] || 0), 0));
-                return Math.max(...totals, 1); // evite la division par zéro
+                return Math.max(...totals, 1); 
             }, [aggregated]);
 
             return (
@@ -427,7 +545,7 @@
                     </div>
 
                     <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                        {/* Graphique réparé avec structure correcte pour le CSS */}
+                        {/* Graphique */}
                         <div className="h-64 flex items-end gap-4 mb-10 border-b border-slate-100 pb-2 mt-6">
                             {YEARS.map(y => {
                                 const key = `q${y.toString().slice(-2)}`;
@@ -436,13 +554,11 @@
                                 
                                 return (
                                     <div key={y} className="flex-1 h-full flex flex-col justify-end items-center gap-2 group relative">
-                                        {/* Container strict pour la hauteur du composant bar */}
                                         <div className="w-full bg-slate-50 rounded-t-xl h-full flex flex-col justify-end mt-4 relative">
                                             <div 
                                                 className="w-full bg-blue-600 rounded-t-xl transition-all duration-700 hover:brightness-110 relative" 
                                                 style={{ height: `${Math.max(heightPercent, totalYear > 0 ? 2 : 0)}%` }}
                                             >
-                                                {/* Tooltip au-dessus de la barre */}
                                                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity bg-white px-2 py-1 rounded shadow-md whitespace-nowrap z-10 pointer-events-none border border-blue-100">
                                                     {totalYear.toLocaleString()}
                                                 </div>
@@ -488,8 +604,6 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSport, setSelectedSport] = useState('All'); 
-            
-            // État pour afficher la popup Modal (au niveau racine de l'app)
             const [selectedBike, setSelectedBike] = useState(null);
             
             const [bikesData, setBikesData] = useState(() => {
@@ -510,7 +624,7 @@
             const filteredBikes = useMemo(() => {
                 const term = searchTerm.trim().toLowerCase();
                 return bikesData.filter(b => {
-                    const matchSearch = !term || [b.name, b.ekit, b.motor, b.sport, b.platform, b.display, b.battery].some(field => (field || "").toString().toLowerCase().includes(term));
+                    const matchSearch = !term || [b.name, b.ekit, b.sport, b.platform, b.display, b.battery].some(field => (field || "").toString().toLowerCase().includes(term));
                     const matchSport = selectedSport === 'All' || b.sport === selectedSport;
                     return matchSearch && matchSport;
                 });
@@ -534,7 +648,7 @@
                             })}
                         </nav>
                         <div className="p-4 border-t border-slate-800 text-center">
-                            <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Version Cache Local</span>
+                            <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Intégration BDD</span>
                         </div>
                     </aside>
 
@@ -554,14 +668,6 @@
                                     <option value="All">Tous les sports</option>
                                     {sportsList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
-                            </div>
-
-                            <div className="flex items-center gap-4 ml-4">
-                                <div className="text-right hidden xl:block">
-                                    <p className="text-sm font-bold text-slate-800">Équipe Roadmap</p>
-                                    <p className="text-[10px] font-bold text-slate-400 tracking-wide uppercase">Decathlon</p>
-                                </div>
-                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600">BT</div>
                             </div>
                         </header>
 
@@ -590,9 +696,9 @@
                                                 </div>
                                                 <div className="space-y-4">
                                                     {filteredBikes.map(b => (
-                                                        <div key={b.id} className="grid grid-cols-8 gap-4 items-center group">
+                                                        <div key={b.id} className="grid grid-cols-8 gap-4 items-center group cursor-pointer" onClick={() => setSelectedBike(b)}>
                                                             <div className="col-span-2">
-                                                                <p className="font-bold text-slate-800 truncate leading-tight" title={b.name}>{b.name}</p>
+                                                                <p className="font-bold text-slate-800 truncate leading-tight group-hover:text-blue-600 transition-colors" title={b.name}>{b.name}</p>
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase">{b.sport}</span>
                                                             </div>
                                                             <div className="col-span-6 h-6 bg-slate-50 rounded-lg relative overflow-hidden">
@@ -615,7 +721,6 @@
                         </main>
                     </div>
 
-                    {/* ID Card Modal rendu au plus haut niveau pour éviter les problèmes de superposition / CSS Transform */}
                     <BikeIdCardModal selectedBike={selectedBike} onClose={() => setSelectedBike(null)} />
 
                 </div>
@@ -626,7 +731,6 @@
         root.render(<App />);
     </script>
     <style>
-        /* Modification pour la Modal : on n'applique pas de CSS Transform qui dérègle le "position: fixed" */
         @keyframes fadeInOpacityOnly { from { opacity: 0; } to { opacity: 1; } }
         .animate-fadeIn { animation: fadeInOpacityOnly 0.3s ease-out forwards; }
     </style>
