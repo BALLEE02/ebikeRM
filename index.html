@@ -17,7 +17,6 @@
 
         // --- MOTEUR INTELLIGENT DE TRAITEMENT DES DONNÉES ---
         const processBikesData = (allRows) => {
-            // 1. Détection automatique de la vraie ligne d'en-tête (contourne les notes en haut de fichier)
             let headerRowIndex = 0;
             let bestScore = 0;
             
@@ -37,7 +36,6 @@
             const headers = allRows[headerRowIndex].map(h => (h || "").toLowerCase().trim().replace(/[\n\r]/g, ' '));
             const dataRows = allRows.slice(headerRowIndex + 1);
 
-            // 2. Recherche par mots-clés des colonnes importantes (Fuzzy Matching)
             const findColIndex = (keywords) => {
                 for (let kw of keywords) {
                     const idx = headers.findIndex(h => h.includes(kw));
@@ -53,7 +51,6 @@
             const idxBatteryCol = findColIndex(['battery', 'batterie', 'energy']);
             const idxDisplayCol = findColIndex(['display', 'cockpit', 'ihm', 'hmi', 'screen']);
             
-            // Colonnes spécifiques au nouveau format "Pivoté" (1 ligne = 1 composant)
             const idxCompType = findColIndex(['component type', 'type de composant']);
             const idxCompName = findColIndex(['component name', 'nom du composant', 'compo to consider']);
 
@@ -64,7 +61,6 @@
                 if (idx !== -1) yearIndexes[year] = idx;
             });
 
-            // 3. Détermination de la structure du fichier
             const isPivoted = idxCompType !== -1 && idxCompName !== -1;
             
             const getVal = (row, idx, fallback = "N/A") => {
@@ -79,9 +75,7 @@
                 return Math.round(parseFloat(cleanVal)) || 0;
             };
 
-            // 4. Reconstruction des données
             if (isPivoted) {
-                // Format Pivoté (ex: bdd.csv) : On regroupe les composants par nom de vélo
                 const bikesMap = {};
                 dataRows.forEach((row, index) => {
                     const bikeName = getVal(row, idxName);
@@ -109,7 +103,6 @@
                         if (compType.includes('hmi') || compType.includes('display') || compType.includes('cockpit')) b.display = compName;
                     }
 
-                    // On prend le maximum des quantités trouvées pour le même vélo (car elles sont répétées sur chaque ligne de composant)
                     [2026, 2027, 2028, 2029, 2030, 2031].forEach(y => {
                         const val = getNum(row, yearIndexes[y]);
                         b[`q${y.toString().slice(-2)}`] = Math.max(b[`q${y.toString().slice(-2)}`], val);
@@ -118,7 +111,6 @@
                 return Object.values(bikesMap).filter(b => b.q26 > 0 || b.q27 > 0 || b.q28 > 0 || b.q29 > 0 || b.q30 > 0 || b.q31 > 0 || b.ekit !== "N/A");
             
             } else {
-                // Format Classique (1 ligne = 1 vélo)
                 return dataRows.map((row, index) => {
                     return {
                         id: `bike-${index}-${Date.now()}`,
@@ -141,14 +133,12 @@
             }
         };
 
-        // Parseur CSV robuste gérant les retours à la ligne dans les cellules
         const parseCSV = (text) => {
             try {
                 if (text.trim().toLowerCase().startsWith('<!doctype') || text.trim().toLowerCase().startsWith('<html')) {
                     throw new Error("Erreur: Le fichier reçu est une page Web HTML. Assurez-vous d'avoir téléchargé un CSV.");
                 }
 
-                // Détection intelligente du séparateur
                 const firstLinePreview = text.split('\n')[0] || "";
                 const secondLinePreview = text.split('\n')[1] || "";
                 const checkText = firstLinePreview + secondLinePreview;
@@ -229,7 +219,6 @@
 
             const exportUrl = useMemo(() => {
                 if (!sheetUrl.trim()) return null;
-                // Détecter dynamiquement l'onglet demandé
                 const matchGid = sheetUrl.match(/gid=([0-9]+)/);
                 const gidParam = matchGid ? `&gid=${matchGid[1]}` : '';
                 const baseUrl = sheetUrl.split('/edit')[0];
@@ -507,7 +496,7 @@
 
         // --- VUE PROJECTIONS ---
         const ProjectionsView = ({ bikes }) => {
-            const [type, setType] = useState('ekit'); // 'ekit', 'battery', 'display'
+            const [type, setType] = useState('ekit'); 
             
             const aggregated = useMemo(() => {
                 const agg = {};
@@ -602,8 +591,13 @@
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
+            
+            // Filters State
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSport, setSelectedSport] = useState('All'); 
+            const [selectedEkit, setSelectedEkit] = useState('All');
+            const [selectedBattery, setSelectedBattery] = useState('All');
+
             const [selectedBike, setSelectedBike] = useState(null);
             
             const [bikesData, setBikesData] = useState(() => {
@@ -616,19 +610,22 @@
                 localStorage.setItem('roadmap_bikes_data', JSON.stringify(data));
             };
 
-            const sportsList = useMemo(() => {
-                const sp = new Set(bikesData.map(b => b.sport).filter(s => s && s !== 'N/A'));
-                return Array.from(sp).sort();
-            }, [bikesData]);
+            // Options for dropdowns
+            const sportsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.sport).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const ekitsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.ekit || b.motor).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const batteriesList = useMemo(() => Array.from(new Set(bikesData.map(b => b.battery).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
 
             const filteredBikes = useMemo(() => {
                 const term = searchTerm.trim().toLowerCase();
                 return bikesData.filter(b => {
                     const matchSearch = !term || [b.name, b.ekit, b.sport, b.platform, b.display, b.battery].some(field => (field || "").toString().toLowerCase().includes(term));
                     const matchSport = selectedSport === 'All' || b.sport === selectedSport;
-                    return matchSearch && matchSport;
+                    const matchEkit = selectedEkit === 'All' || b.ekit === selectedEkit || b.motor === selectedEkit;
+                    const matchBattery = selectedBattery === 'All' || b.battery === selectedBattery;
+                    
+                    return matchSearch && matchSport && matchEkit && matchBattery;
                 });
-            }, [bikesData, searchTerm, selectedSport]);
+            }, [bikesData, searchTerm, selectedSport, selectedEkit, selectedBattery]);
 
             return (
                 <div className="flex min-h-screen bg-slate-50">
@@ -652,21 +649,37 @@
                         </div>
                     </aside>
 
-                    <div className="flex-1 ml-64 flex flex-col">
-                        <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-                            
-                            <div className="flex gap-4 w-full max-w-2xl">
-                                <div className="relative flex-1">
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><IconSearch /></div>
-                                    <input type="text" placeholder="Chercher un vélo, un E-Kit..." className="w-full bg-slate-100 border-none rounded-2xl pl-12 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <div className="flex-1 ml-64 flex flex-col min-w-0">
+                        <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-10 shadow-sm flex items-center justify-center min-h-[80px]">
+                            {/* Filtres Globaux */}
+                            <div className="flex flex-wrap gap-3 w-full max-w-5xl">
+                                <div className="relative flex-[2] min-w-[200px]">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><IconSearch size={18} /></div>
+                                    <input type="text" placeholder="Chercher un vélo, composant..." className="w-full bg-slate-100 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
                                 <select 
-                                    className="bg-slate-100 border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold min-w-[160px] cursor-pointer"
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[140px] cursor-pointer"
                                     value={selectedSport}
                                     onChange={(e) => setSelectedSport(e.target.value)}
                                 >
-                                    <option value="All">Tous les sports</option>
+                                    <option value="All">Tous Sports</option>
                                     {sportsList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <select 
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[140px] cursor-pointer"
+                                    value={selectedEkit}
+                                    onChange={(e) => setSelectedEkit(e.target.value)}
+                                >
+                                    <option value="All">Tous E-Kits</option>
+                                    {ekitsList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <select 
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[140px] cursor-pointer"
+                                    value={selectedBattery}
+                                    onChange={(e) => setSelectedBattery(e.target.value)}
+                                >
+                                    <option value="All">Toutes Batteries</option>
+                                    {batteriesList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                         </header>
