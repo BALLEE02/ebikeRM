@@ -50,6 +50,9 @@
             const idxMotorCol = findColIndex(['eboost ekit', 'motor', 'ekit', 'e-kit', 'assistance']);
             const idxBatteryCol = findColIndex(['battery', 'batterie', 'energy']);
             const idxDisplayCol = findColIndex(['display', 'cockpit', 'ihm', 'hmi', 'screen']);
+            const idxDriverCol = findColIndex(['driver', 'controller']); // AJOUT DU DRIVER
+            const idxStartDate = findColIndex(['start', 'sop', 'début', 'kickoff', 'go prod', 'date']); // RETOUR DU SOP
+            const idxEndDate = findColIndex(['end', 'eop', 'fin']);
             
             const idxCompType = findColIndex(['component type', 'type de composant']);
             const idxCompName = findColIndex(['component name', 'nom du composant', 'compo to consider']);
@@ -75,6 +78,11 @@
                 return Math.round(parseFloat(cleanVal)) || 0;
             };
 
+            const extractYear = (str, defaultYear) => {
+                const match = (str || "").match(/(20\d{2})/);
+                return match ? parseInt(match[1]) : defaultYear;
+            };
+
             if (isPivoted) {
                 const bikesMap = {};
                 dataRows.forEach((row, index) => {
@@ -87,8 +95,9 @@
                             name: bikeName,
                             sport: getVal(row, idxSport),
                             platform: getVal(row, idxPlatform),
-                            ekit: 'N/A', battery: 'N/A', display: 'N/A',
-                            startYear: 2026, endYear: 2031,
+                            ekit: 'N/A', battery: 'N/A', display: 'N/A', driver: 'N/A',
+                            startYear: extractYear(getVal(row, idxStartDate, "2026"), 2026),
+                            endYear: extractYear(getVal(row, idxEndDate, "2031"), 2031),
                             q26: 0, q27: 0, q28: 0, q29: 0, q30: 0, q31: 0
                         };
                     }
@@ -101,6 +110,7 @@
                         if (compType.includes('battery') || compType.includes('energy')) b.battery = compName;
                         if (compType.includes('assistance') || compType.includes('motor') || compType.includes('ekit')) b.ekit = compName;
                         if (compType.includes('hmi') || compType.includes('display') || compType.includes('cockpit')) b.display = compName;
+                        if (compType.includes('driver') || compType.includes('controller')) b.driver = compName;
                     }
 
                     [2026, 2027, 2028, 2029, 2030, 2031].forEach(y => {
@@ -120,8 +130,9 @@
                         ekit: getVal(row, idxMotorCol),
                         battery: getVal(row, idxBatteryCol),
                         display: getVal(row, idxDisplayCol),
-                        startYear: 2026,
-                        endYear: 2031,
+                        driver: getVal(row, idxDriverCol),
+                        startYear: extractYear(getVal(row, idxStartDate, "2026"), 2026),
+                        endYear: extractYear(getVal(row, idxEndDate, "2031"), 2031),
                         q26: getNum(row, yearIndexes[2026]),
                         q27: getNum(row, yearIndexes[2027]),
                         q28: getNum(row, yearIndexes[2028]),
@@ -197,6 +208,7 @@
         const IconCpu = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>;
         const IconBattery = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>;
         const IconMonitor = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/></svg>;
+        const IconDriver = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>;
         const IconSort = ({ direction }) => (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`inline-block ml-1 transition-transform ${direction === 'descending' ? 'rotate-180' : ''}`}>
                 <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
@@ -365,21 +377,26 @@
                         <div className="p-8">
                             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-2">Composition E-Kit</h3>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
-                                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconCpu size={24} /></div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col items-center text-center">
+                                    <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><IconCpu size={20} /></div>
                                     <p className="text-[10px] uppercase font-bold text-slate-400">E-Kit</p>
-                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.ekit}</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-xs">{selectedBike.ekit}</p>
                                 </div>
-                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
-                                    <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconBattery size={24} /></div>
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col items-center text-center">
+                                    <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><IconBattery size={20} /></div>
                                     <p className="text-[10px] uppercase font-bold text-slate-400">Batterie</p>
-                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.battery}</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-xs">{selectedBike.battery}</p>
                                 </div>
-                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center text-center">
-                                    <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 shadow-inner"><IconMonitor size={24} /></div>
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col items-center text-center">
+                                    <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><IconMonitor size={20} /></div>
                                     <p className="text-[10px] uppercase font-bold text-slate-400">Display / HMI</p>
-                                    <p className="font-bold text-slate-800 mt-1 text-sm">{selectedBike.display}</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-xs">{selectedBike.display}</p>
+                                </div>
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col items-center text-center">
+                                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><IconDriver size={20} /></div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400">Driver</p>
+                                    <p className="font-bold text-slate-800 mt-1 text-xs">{selectedBike.driver}</p>
                                 </div>
                             </div>
 
@@ -597,6 +614,8 @@
             const [selectedSport, setSelectedSport] = useState('All'); 
             const [selectedEkit, setSelectedEkit] = useState('All');
             const [selectedBattery, setSelectedBattery] = useState('All');
+            const [selectedDriver, setSelectedDriver] = useState('All');
+            const [selectedDisplay, setSelectedDisplay] = useState('All');
 
             const [selectedBike, setSelectedBike] = useState(null);
             
@@ -614,18 +633,22 @@
             const sportsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.sport).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
             const ekitsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.ekit || b.motor).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
             const batteriesList = useMemo(() => Array.from(new Set(bikesData.map(b => b.battery).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const driversList = useMemo(() => Array.from(new Set(bikesData.map(b => b.driver).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const displaysList = useMemo(() => Array.from(new Set(bikesData.map(b => b.display).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
 
             const filteredBikes = useMemo(() => {
                 const term = searchTerm.trim().toLowerCase();
                 return bikesData.filter(b => {
-                    const matchSearch = !term || [b.name, b.ekit, b.sport, b.platform, b.display, b.battery].some(field => (field || "").toString().toLowerCase().includes(term));
+                    const matchSearch = !term || [b.name, b.ekit, b.sport, b.platform, b.display, b.battery, b.driver].some(field => (field || "").toString().toLowerCase().includes(term));
                     const matchSport = selectedSport === 'All' || b.sport === selectedSport;
                     const matchEkit = selectedEkit === 'All' || b.ekit === selectedEkit || b.motor === selectedEkit;
                     const matchBattery = selectedBattery === 'All' || b.battery === selectedBattery;
+                    const matchDriver = selectedDriver === 'All' || b.driver === selectedDriver;
+                    const matchDisplay = selectedDisplay === 'All' || b.display === selectedDisplay;
                     
-                    return matchSearch && matchSport && matchEkit && matchBattery;
+                    return matchSearch && matchSport && matchEkit && matchBattery && matchDriver && matchDisplay;
                 });
-            }, [bikesData, searchTerm, selectedSport, selectedEkit, selectedBattery]);
+            }, [bikesData, searchTerm, selectedSport, selectedEkit, selectedBattery, selectedDriver, selectedDisplay]);
 
             return (
                 <div className="flex min-h-screen bg-slate-50">
@@ -652,34 +675,50 @@
                     <div className="flex-1 ml-64 flex flex-col min-w-0">
                         <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-10 shadow-sm flex items-center justify-center min-h-[80px]">
                             {/* Filtres Globaux */}
-                            <div className="flex flex-wrap gap-3 w-full max-w-5xl">
-                                <div className="relative flex-[2] min-w-[200px]">
+                            <div className="flex flex-wrap gap-3 w-full max-w-6xl items-center">
+                                <div className="relative flex-[1.5] min-w-[180px]">
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><IconSearch size={18} /></div>
-                                    <input type="text" placeholder="Chercher un vélo, composant..." className="w-full bg-slate-100 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    <input type="text" placeholder="Chercher un vélo..." className="w-full bg-slate-100 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
                                 <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[140px] cursor-pointer"
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
                                     value={selectedSport}
                                     onChange={(e) => setSelectedSport(e.target.value)}
                                 >
-                                    <option value="All">Tous Sports</option>
+                                    <option value="All">Sports (Tous)</option>
                                     {sportsList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                                 <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[140px] cursor-pointer"
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
                                     value={selectedEkit}
                                     onChange={(e) => setSelectedEkit(e.target.value)}
                                 >
-                                    <option value="All">Tous E-Kits</option>
+                                    <option value="All">E-Kits (Tous)</option>
                                     {ekitsList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                                 <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[140px] cursor-pointer"
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
                                     value={selectedBattery}
                                     onChange={(e) => setSelectedBattery(e.target.value)}
                                 >
-                                    <option value="All">Toutes Batteries</option>
+                                    <option value="All">Batteries (Toutes)</option>
                                     {batteriesList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <select 
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
+                                    value={selectedDisplay}
+                                    onChange={(e) => setSelectedDisplay(e.target.value)}
+                                >
+                                    <option value="All">HMI (Tous)</option>
+                                    {displaysList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <select 
+                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
+                                    value={selectedDriver}
+                                    onChange={(e) => setSelectedDriver(e.target.value)}
+                                >
+                                    <option value="All">Drivers (Tous)</option>
+                                    {driversList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                         </header>
