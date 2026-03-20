@@ -748,9 +748,9 @@
                     <div className="flex justify-between items-center">
                         <h1 className="text-2xl font-bold">Dashboard <span className="text-slate-400 text-lg font-medium ml-2">| Projections Quantités</span></h1>
                         <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
-                            {['ekit', 'motor', 'battery', 'display'].map(t => (
+                            {['ekit', 'motor', 'battery', 'display', 'driver'].map(t => (
                                 <button key={t} onClick={() => setType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${type === t ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-                                    {t === 'ekit' ? 'E-Kits' : t === 'motor' ? 'Moteurs' : t === 'battery' ? 'Batteries' : 'Displays (HMI)'}
+                                    {t === 'ekit' ? 'E-Kits' : t === 'motor' ? 'Moteurs' : t === 'battery' ? 'Batteries' : t === 'display' ? 'Displays (HMI)' : 'Drivers'}
                                 </button>
                             ))}
                         </div>
