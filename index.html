@@ -3,17 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E-Mobility Roadmap Center</title>
+    <title>Dashboard Eboost</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* Custom styles for the multiselect dropdowns to look clean */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .multiselect-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            width: 100%;
+            min-width: max-content;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            z-index: 50;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none;
+        }
+        .multiselect-container.active .multiselect-dropdown { display: block; }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo, useEffect } = React;
+        const { useState, useMemo, useEffect, useRef } = React;
 
         // --- MOTEUR INTELLIGENT DE TRAITEMENT DES DONNÉES ---
         const processBikesData = (allRows) => {
@@ -37,7 +61,7 @@
             const headers = allRows[headerRowIndex].map(h => (h || "").toLowerCase().trim().replace(/[\n\r]/g, ' '));
             const dataRows = allRows.slice(headerRowIndex + 1);
 
-            // Recherche intelligente de colonnes
+            // Recherche intelligente de colonnes (Exact match d'abord, puis Includes)
             const findColIndex = (keywords) => {
                 for (let kw of keywords) {
                     const idx = headers.findIndex(h => h === kw);
@@ -53,7 +77,7 @@
             const idxName = findColIndex(['cc name', 'bikes name', 'eboost name', 'bike', 'vélo', 'ecosystem', 'modèle', 'cc']);
             const idxSport = findColIndex(['segment', 'sport', 'famille']);
             const idxProjectManager = findColIndex(['project manager', 'chef de projet', 'manager']);
-            const idxEkit = findColIndex(['platform ico', 'platform', 'plateforme', 'eboost ekit', 'ekit', 'e-kit']);
+            const idxEkit = findColIndex(['platform ico', 'platform', 'plateforme', 'eboost ekit', 'ekit', 'e-kit']); // ekit branché sur PLATFORM ICO en priorité
             const idxMotorCol = findColIndex(['motor', 'moteur']); 
             const idxBatteryCol = findColIndex(['battery', 'batterie', 'energy']);
             const idxDisplayCol = findColIndex(['display', 'cockpit', 'ihm', 'hmi', 'screen']);
@@ -66,6 +90,7 @@
 
             const yearIndexes = {};
             [2026, 2027, 2028, 2029, 2030, 2031].forEach(year => {
+                // Ignore les colonnes de regroupement type "2026-2030 QTY"
                 let idx = headers.findIndex(h => h.includes(year.toString()) && !h.includes('-'));
                 if (idx !== -1) yearIndexes[year] = idx;
             });
@@ -84,10 +109,28 @@
                 return Math.round(parseFloat(cleanVal)) || 0;
             };
 
-            const extractYear = (str, defaultYear) => {
-                if (!str || str === "N/A") return defaultYear;
-                const match = str.match(/(20\d{2})/);
-                return match ? parseInt(match[1]) : defaultYear;
+            // Parseur de Date intelligent : retourne une chaîne ISO (sécurisé pour le LocalStorage)
+            const parseExactDate = (str, defaultYear, isEnd) => {
+                if (!str || str === "N/A" || str === "Exist but No quantity") {
+                    return new Date(defaultYear, isEnd ? 11 : 0, isEnd ? 31 : 1).toISOString();
+                }
+                const parts = str.split(/[-/]/);
+                if (parts.length === 3) {
+                    let p1 = parseInt(parts[0], 10);
+                    let p2 = parseInt(parts[1], 10);
+                    let p3 = parseInt(parts[2], 10);
+                    if (p3 < 100) p3 += 2000;
+                    
+                    // Si le 2e chiffre > 12, on est sûr que c'est MM/DD/YYYY
+                    let day = p1, month = p2, year = p3;
+                    if (month > 12) {
+                        day = p2; month = p1;
+                    }
+                    
+                    const date = new Date(year, month - 1, day);
+                    if (!isNaN(date.getTime())) return date.toISOString();
+                }
+                return new Date(defaultYear, isEnd ? 11 : 0, isEnd ? 31 : 1).toISOString();
             };
 
             if (isPivoted) {
@@ -104,8 +147,8 @@
                             projectManager: getVal(row, idxProjectManager),
                             ekit: 'N/A', motor: 'N/A', battery: 'N/A', display: 'N/A', driver: 'N/A',
                             startRaw: getVal(row, idxStartDate), endRaw: getVal(row, idxEndDate),
-                            startYear: extractYear(getVal(row, idxStartDate), 2026),
-                            endYear: extractYear(getVal(row, idxEndDate), 2031),
+                            parsedStart: parseExactDate(getVal(row, idxStartDate), 2026, false),
+                            parsedEnd: parseExactDate(getVal(row, idxEndDate), 2031, true),
                             q26: 0, q27: 0, q28: 0, q29: 0, q30: 0, q31: 0
                         };
                     }
@@ -131,8 +174,8 @@
             
             } else {
                 return dataRows.map((row, index) => {
-                    const startR = getVal(row, idxStartDate, "2026");
-                    const endR = getVal(row, idxEndDate, "2031");
+                    const startR = getVal(row, idxStartDate, "");
+                    const endR = getVal(row, idxEndDate, "");
                     
                     return {
                         id: `bike-${index}-${Date.now()}`,
@@ -146,8 +189,8 @@
                         driver: getVal(row, idxDriverCol),
                         startRaw: startR,
                         endRaw: endR,
-                        startYear: extractYear(startR, 2026),
-                        endYear: extractYear(endR, 2031),
+                        parsedStart: parseExactDate(startR, 2026, false),
+                        parsedEnd: parseExactDate(endR, 2031, true),
                         q26: getNum(row, yearIndexes[2026]),
                         q27: getNum(row, yearIndexes[2027]),
                         q28: getNum(row, yearIndexes[2028]),
@@ -230,10 +273,101 @@
                 <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
             </svg>
         );
+        const IconChevronDown = ({ size = 16, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        );
 
         const YEARS = [2026, 2027, 2028, 2029, 2030, 2031];
 
-        // --- VUE PARAMÈTRES BDD (Ancien Dashboard) ---
+        // --- COMPOSANT MULTI-SELECT DROPDOWN ---
+        const MultiSelect = ({ options, selectedOptions, onChange, placeholder }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const wrapperRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                        setIsOpen(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            const toggleOption = (option) => {
+                let newSelected;
+                if (selectedOptions.includes(option)) {
+                    newSelected = selectedOptions.filter(o => o !== option);
+                } else {
+                    newSelected = [...selectedOptions, option];
+                }
+                onChange(newSelected);
+            };
+
+            const toggleAll = () => {
+                if (selectedOptions.length === options.length) {
+                    onChange([]);
+                } else {
+                    onChange([...options]);
+                }
+            };
+
+            let displayText = placeholder;
+            if (selectedOptions.length > 0) {
+                if (selectedOptions.length === 1) {
+                    displayText = selectedOptions[0].length > 15 ? selectedOptions[0].substring(0, 15) + '...' : selectedOptions[0];
+                } else if (selectedOptions.length === options.length && options.length > 0) {
+                    displayText = `Tous (${options.length})`;
+                } else {
+                    displayText = `${selectedOptions.length} sél.`;
+                }
+            }
+
+            const isAllSelected = selectedOptions.length === options.length && options.length > 0;
+
+            return (
+                <div ref={wrapperRef} className={`relative flex-1 min-w-[140px] multiselect-container ${isOpen ? 'active' : ''}`}>
+                    <div 
+                        className={`bg-slate-100 border border-transparent rounded-xl px-3 py-2.5 text-sm outline-none text-slate-700 font-bold w-full cursor-pointer flex justify-between items-center transition-colors ${isOpen ? 'bg-white border-blue-500 ring-2 ring-blue-500/20' : 'hover:bg-slate-200'}`}
+                        onClick={() => setIsOpen(!isOpen)}
+                    >
+                        <span className="truncate pr-2">{displayText}</span>
+                        <IconChevronDown className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    
+                    <div className="multiselect-dropdown custom-scrollbar py-1">
+                        <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2 cursor-pointer hover:bg-slate-50" onClick={toggleAll}>
+                            <input 
+                                type="checkbox" 
+                                checked={isAllSelected}
+                                onChange={toggleAll}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <span className="text-sm font-bold text-slate-800 select-none">Sélectionner tout</span>
+                        </div>
+                        {options.map(option => (
+                            <label key={option} className="px-3 py-2 flex items-start gap-2 cursor-pointer hover:bg-slate-50 transition-colors">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedOptions.includes(option)}
+                                    onChange={() => toggleOption(option)}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-0.5 cursor-pointer"
+                                />
+                                <span className="text-sm text-slate-700 select-none break-words flex-1 leading-tight">{option}</span>
+                            </label>
+                        ))}
+                        {options.length === 0 && (
+                            <div className="px-3 py-4 text-sm text-slate-400 italic text-center">Aucune option</div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- VUE PARAMÈTRES BDD ---
         const SettingsView = ({ bikes, onUpload }) => {
             const [status, setStatus] = useState(null);
             const [sheetUrl, setSheetUrl] = useState(() => localStorage.getItem('roadmap_sheet_url') || '');
@@ -376,6 +510,13 @@
         const BikeIdCardModal = ({ selectedBike, onClose }) => {
             if (!selectedBike) return null;
 
+            // Fonction locale de formattage des dates pour l'ID Card
+            const formatDisplayDate = (isoStr) => {
+                if (!isoStr) return 'N/A';
+                const d = new Date(isoStr);
+                return isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+            };
+
             const modalContent = (
                 <div 
                     onClick={onClose}
@@ -431,7 +572,7 @@
                             <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-100 flex items-center justify-between">
                                 <div className="text-center">
                                     <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">SOP</p>
-                                    <p className="font-black text-xl text-slate-800">{selectedBike.startRaw || selectedBike.startYear}</p>
+                                    <p className="font-black text-xl text-slate-800">{formatDisplayDate(selectedBike.parsedStart)}</p>
                                 </div>
                                 <div className="h-px bg-blue-200 flex-1 mx-6 relative">
                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-blue-200 px-3 py-1 rounded-full text-xs font-bold text-blue-600 shadow-sm">
@@ -440,7 +581,7 @@
                                 </div>
                                 <div className="text-center">
                                     <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">EOP</p>
-                                    <p className="font-black text-xl text-slate-800">{selectedBike.endRaw || selectedBike.endYear}</p>
+                                    <p className="font-black text-xl text-slate-800">{formatDisplayDate(selectedBike.parsedEnd)}</p>
                                 </div>
                             </div>
                         </div>
@@ -471,8 +612,8 @@
                         aVal = YEARS.reduce((s, y) => s + (a[`q${y.toString().slice(-2)}`] || 0), 0);
                         bVal = YEARS.reduce((s, y) => s + (b[`q${y.toString().slice(-2)}`] || 0), 0);
                     } else if (sortConfig.key === 'startYear') {
-                        aVal = a.startYear || 0;
-                        bVal = b.startYear || 0;
+                        aVal = a.parsedStart ? new Date(a.parsedStart).getTime() : 0;
+                        bVal = b.parsedStart ? new Date(b.parsedStart).getTime() : 0;
                     } else {
                         aVal = (a[sortConfig.key] || '').toString().toLowerCase();
                         bVal = (b[sortConfig.key] || '').toString().toLowerCase();
@@ -520,23 +661,28 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {sortedBikes.map(b => (
-                                    <tr key={b.id} onClick={() => onSelectBike(b)} className="border-b border-slate-50 hover:bg-blue-50/50 transition-colors cursor-pointer group">
-                                        <td className="py-4 px-6">
-                                            <p className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{b.name}</p>
-                                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{b.sport} • {b.projectManager}</p>
-                                        </td>
-                                        <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.ekit}</td>
-                                        <td className="py-4 px-6 text-sm text-slate-500">{b.motor}</td>
-                                        <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
-                                        <td className="py-4 px-6 text-center">
-                                            <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full uppercase">{b.startRaw || b.startYear}</span>
-                                        </td>
-                                        <td className="py-4 px-6 text-sm text-slate-600 font-bold text-right">
-                                            {YEARS.reduce((s, y) => s + (b[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {sortedBikes.map(b => {
+                                    const d = new Date(b.parsedStart);
+                                    const dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : b.startRaw;
+                                    
+                                    return (
+                                        <tr key={b.id} onClick={() => onSelectBike(b)} className="border-b border-slate-50 hover:bg-blue-50/50 transition-colors cursor-pointer group">
+                                            <td className="py-4 px-6">
+                                                <p className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{b.name}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{b.sport} • {b.projectManager}</p>
+                                            </td>
+                                            <td className="py-4 px-6 text-sm font-medium text-slate-600">{b.ekit}</td>
+                                            <td className="py-4 px-6 text-sm text-slate-500">{b.motor}</td>
+                                            <td className="py-4 px-6 text-sm text-slate-500">{b.battery}</td>
+                                            <td className="py-4 px-6 text-center">
+                                                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full uppercase whitespace-nowrap">{dateStr}</span>
+                                            </td>
+                                            <td className="py-4 px-6 text-sm text-slate-600 font-bold text-right">
+                                                {YEARS.reduce((s, y) => s + (b[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -544,7 +690,7 @@
             );
         };
 
-        // --- VUE PROJECTIONS (ANCIEN DASHBOARD) ---
+        // --- VUE PROJECTIONS ---
         const ProjectionsView = ({ bikes }) => {
             const [type, setType] = useState('ekit'); 
             const [sortConfig, setSortConfig] = useState({ key: 'total', direction: 'descending' });
@@ -601,7 +747,7 @@
                 <div className="space-y-6 animate-fadeIn">
                     <div className="flex justify-between items-center">
                         <h1 className="text-2xl font-bold">Dashboard <span className="text-slate-400 text-lg font-medium ml-2">| Projections Quantités</span></h1>
-                        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex">
+                        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
                             {['ekit', 'motor', 'battery', 'display'].map(t => (
                                 <button key={t} onClick={() => setType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${type === t ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
                                     {t === 'ekit' ? 'E-Kits' : t === 'motor' ? 'Moteurs' : t === 'battery' ? 'Batteries' : 'Displays (HMI)'}
@@ -677,14 +823,14 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('projections'); // Dashboard est maintenant Projections
             
-            // Filters State
+            // Filters State (now Arrays for multi-select)
             const [searchTerm, setSearchTerm] = useState('');
-            const [selectedSport, setSelectedSport] = useState('All'); 
-            const [selectedEkit, setSelectedEkit] = useState('All');
-            const [selectedMotor, setSelectedMotor] = useState('All');
-            const [selectedBattery, setSelectedBattery] = useState('All');
-            const [selectedDriver, setSelectedDriver] = useState('All');
-            const [selectedDisplay, setSelectedDisplay] = useState('All');
+            const [selectedSports, setSelectedSports] = useState([]); 
+            const [selectedEkits, setSelectedEkits] = useState([]);
+            const [selectedMotors, setSelectedMotors] = useState([]);
+            const [selectedBatteries, setSelectedBatteries] = useState([]);
+            const [selectedDrivers, setSelectedDrivers] = useState([]);
+            const [selectedDisplays, setSelectedDisplays] = useState([]);
 
             const [selectedBike, setSelectedBike] = useState(null);
             
@@ -720,35 +866,45 @@
                 localStorage.setItem('roadmap_bikes_data', JSON.stringify(data));
             };
 
-            // Options for dropdowns
-            const sportsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.sport).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
-            const ekitsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.ekit).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
-            const motorsList = useMemo(() => Array.from(new Set(bikesData.map(b => b.motor).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
-            const batteriesList = useMemo(() => Array.from(new Set(bikesData.map(b => b.battery).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
-            const driversList = useMemo(() => Array.from(new Set(bikesData.map(b => b.driver).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
-            const displaysList = useMemo(() => Array.from(new Set(bikesData.map(b => b.display).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
-
-            const filteredBikes = useMemo(() => {
+            // Filtrage en cascade
+            const activeFilteredBikesForOptions = useMemo(() => {
                 const term = searchTerm.trim().toLowerCase();
                 return bikesData.filter(b => {
                     const matchSearch = !term || [b.name, b.ekit, b.motor, b.sport, b.platform, b.display, b.battery, b.driver].some(field => (field || "").toString().toLowerCase().includes(term));
-                    const matchSport = selectedSport === 'All' || b.sport === selectedSport;
-                    const matchEkit = selectedEkit === 'All' || b.ekit === selectedEkit;
-                    const matchMotor = selectedMotor === 'All' || b.motor === selectedMotor;
-                    const matchBattery = selectedBattery === 'All' || b.battery === selectedBattery;
-                    const matchDriver = selectedDriver === 'All' || b.driver === selectedDriver;
-                    const matchDisplay = selectedDisplay === 'All' || b.display === selectedDisplay;
+                    const matchSport = selectedSports.length === 0 || selectedSports.includes(b.sport);
+                    const matchEkit = selectedEkits.length === 0 || selectedEkits.includes(b.ekit);
+                    const matchMotor = selectedMotors.length === 0 || selectedMotors.includes(b.motor);
+                    const matchBattery = selectedBatteries.length === 0 || selectedBatteries.includes(b.battery);
+                    const matchDriver = selectedDrivers.length === 0 || selectedDrivers.includes(b.driver);
+                    const matchDisplay = selectedDisplays.length === 0 || selectedDisplays.includes(b.display);
                     
                     return matchSearch && matchSport && matchEkit && matchMotor && matchBattery && matchDriver && matchDisplay;
                 });
-            }, [bikesData, searchTerm, selectedSport, selectedEkit, selectedMotor, selectedBattery, selectedDriver, selectedDisplay]);
+            }, [bikesData, searchTerm, selectedSports, selectedEkits, selectedMotors, selectedBatteries, selectedDrivers, selectedDisplays]);
+
+            // Génération des options (basées sur les données en cache)
+            const allSports = useMemo(() => Array.from(new Set(bikesData.map(b => b.sport).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const allEkits = useMemo(() => Array.from(new Set(bikesData.map(b => b.ekit).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const allMotors = useMemo(() => Array.from(new Set(bikesData.map(b => b.motor).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const allBatteries = useMemo(() => Array.from(new Set(bikesData.map(b => b.battery).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const allDrivers = useMemo(() => Array.from(new Set(bikesData.map(b => b.driver).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+            const allDisplays = useMemo(() => Array.from(new Set(bikesData.map(b => b.display).filter(s => s && s !== 'N/A'))).sort(), [bikesData]);
+
+            // Génération des options DISPONIBLES
+            const availableSports = useMemo(() => Array.from(new Set(activeFilteredBikesForOptions.map(b => b.sport).filter(s => s && s !== 'N/A'))).sort(), [activeFilteredBikesForOptions]);
+            const availableEkits = useMemo(() => Array.from(new Set(activeFilteredBikesForOptions.map(b => b.ekit).filter(s => s && s !== 'N/A'))).sort(), [activeFilteredBikesForOptions]);
+            const availableMotors = useMemo(() => Array.from(new Set(activeFilteredBikesForOptions.map(b => b.motor).filter(s => s && s !== 'N/A'))).sort(), [activeFilteredBikesForOptions]);
+            const availableBatteries = useMemo(() => Array.from(new Set(activeFilteredBikesForOptions.map(b => b.battery).filter(s => s && s !== 'N/A'))).sort(), [activeFilteredBikesForOptions]);
+            const availableDrivers = useMemo(() => Array.from(new Set(activeFilteredBikesForOptions.map(b => b.driver).filter(s => s && s !== 'N/A'))).sort(), [activeFilteredBikesForOptions]);
+            const availableDisplays = useMemo(() => Array.from(new Set(activeFilteredBikesForOptions.map(b => b.display).filter(s => s && s !== 'N/A'))).sort(), [activeFilteredBikesForOptions]);
+
 
             return (
                 <div className="flex min-h-screen bg-slate-50">
                     <aside className="w-64 bg-slate-900 text-slate-400 flex flex-col fixed h-full z-20">
                         <div className="p-8 flex items-center gap-3 text-white">
                             <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/40"><IconBike size={24} /></div>
-                            <span className="font-black text-xl tracking-tighter italic uppercase">E-Boost</span>
+                            <span className="font-black text-xl tracking-tighter italic uppercase">Dashboard Eboost</span>
                         </div>
                         <nav className="flex-1 px-4 py-6 space-y-1">
                             {['projections', 'roadmap', 'list'].map(id => {
@@ -760,64 +916,74 @@
                                 );
                             })}
                         </nav>
+                        <div className="p-4 border-t border-slate-800 text-center">
+                            <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Intégration BDD</span>
+                        </div>
                     </aside>
 
                     <div className="flex-1 ml-64 flex flex-col min-w-0">
                         <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-10 shadow-sm flex items-center justify-between min-h-[80px]">
-                            {/* Filtres Globaux */}
+                            {/* Filtres Globaux Multi-Select */}
                             <div className="flex flex-wrap gap-3 w-full max-w-6xl items-center">
                                 <div className="relative flex-[1.5] min-w-[180px]">
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><IconSearch size={18} /></div>
-                                    <input type="text" placeholder="Chercher un vélo..." className="w-full bg-slate-100 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    <input type="text" placeholder="Recherche globale..." className="w-full bg-slate-100 border-transparent rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-medium text-slate-800" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
-                                    value={selectedSport}
-                                    onChange={(e) => setSelectedSport(e.target.value)}
-                                >
-                                    <option value="All">Sports</option>
-                                    {sportsList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                                <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
-                                    value={selectedEkit}
-                                    onChange={(e) => setSelectedEkit(e.target.value)}
-                                >
-                                    <option value="All">E-Kits</option>
-                                    {ekitsList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                                <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
-                                    value={selectedMotor}
-                                    onChange={(e) => setSelectedMotor(e.target.value)}
-                                >
-                                    <option value="All">Moteurs</option>
-                                    {motorsList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                                <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
-                                    value={selectedBattery}
-                                    onChange={(e) => setSelectedBattery(e.target.value)}
-                                >
-                                    <option value="All">Batteries</option>
-                                    {batteriesList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                                <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
-                                    value={selectedDisplay}
-                                    onChange={(e) => setSelectedDisplay(e.target.value)}
-                                >
-                                    <option value="All">HMI</option>
-                                    {displaysList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                                <select 
-                                    className="bg-slate-100 border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-slate-700 font-bold flex-1 min-w-[120px] cursor-pointer"
-                                    value={selectedDriver}
-                                    onChange={(e) => setSelectedDriver(e.target.value)}
-                                >
-                                    <option value="All">Drivers</option>
-                                    {driversList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                
+                                <MultiSelect 
+                                    options={selectedSports.length > 0 ? allSports : availableSports} 
+                                    selectedOptions={selectedSports} 
+                                    onChange={setSelectedSports} 
+                                    placeholder="Sports" 
+                                />
+                                <MultiSelect 
+                                    options={selectedEkits.length > 0 ? allEkits : availableEkits} 
+                                    selectedOptions={selectedEkits} 
+                                    onChange={setSelectedEkits} 
+                                    placeholder="E-Kits" 
+                                />
+                                <MultiSelect 
+                                    options={selectedMotors.length > 0 ? allMotors : availableMotors} 
+                                    selectedOptions={selectedMotors} 
+                                    onChange={setSelectedMotors} 
+                                    placeholder="Moteurs" 
+                                />
+                                <MultiSelect 
+                                    options={selectedBatteries.length > 0 ? allBatteries : availableBatteries} 
+                                    selectedOptions={selectedBatteries} 
+                                    onChange={setSelectedBatteries} 
+                                    placeholder="Batteries" 
+                                />
+                                <MultiSelect 
+                                    options={selectedDisplays.length > 0 ? allDisplays : availableDisplays} 
+                                    selectedOptions={selectedDisplays} 
+                                    onChange={setSelectedDisplays} 
+                                    placeholder="HMI" 
+                                />
+                                <MultiSelect 
+                                    options={selectedDrivers.length > 0 ? allDrivers : availableDrivers} 
+                                    selectedOptions={selectedDrivers} 
+                                    onChange={setSelectedDrivers} 
+                                    placeholder="Drivers" 
+                                />
+                                
+                                {/* Bouton Reset des filtres */}
+                                {(searchTerm || selectedSports.length > 0 || selectedEkits.length > 0 || selectedMotors.length > 0 || selectedBatteries.length > 0 || selectedDrivers.length > 0 || selectedDisplays.length > 0) && (
+                                    <button 
+                                        onClick={() => {
+                                            setSearchTerm('');
+                                            setSelectedSports([]);
+                                            setSelectedEkits([]);
+                                            setSelectedMotors([]);
+                                            setSelectedBatteries([]);
+                                            setSelectedDrivers([]);
+                                            setSelectedDisplays([]);
+                                        }} 
+                                        className="text-xs font-bold text-slate-400 hover:text-rose-500 underline transition-colors px-2"
+                                    >
+                                        Reset
+                                    </button>
+                                )}
                             </div>
 
                             <div className="flex items-center ml-4 pl-4 border-l border-slate-200">
@@ -840,38 +1006,91 @@
                                 </div>
                             ) : (
                                 <>
-                                    {activeTab === 'settings' && <SettingsView bikes={filteredBikes} onUpload={handleUpdateData} />}
+                                    {activeTab === 'settings' && <SettingsView bikes={activeFilteredBikesForOptions} onUpload={handleUpdateData} />}
                                     
-                                    {activeTab === 'list' && <ListAndIdCardView bikes={filteredBikes} onSelectBike={setSelectedBike} />}
+                                    {activeTab === 'list' && <ListAndIdCardView bikes={activeFilteredBikesForOptions} onSelectBike={setSelectedBike} />}
 
-                                    {activeTab === 'projections' && <ProjectionsView bikes={filteredBikes} />}
+                                    {activeTab === 'projections' && <ProjectionsView bikes={activeFilteredBikesForOptions} />}
 
                                     {activeTab === 'roadmap' && (
                                         <div className="space-y-6 animate-fadeIn">
-                                            <h1 className="text-2xl font-bold">Calendrier Roadmap (SOP à EOP)</h1>
+                                            <h1 className="text-2xl font-bold">Roadmap</h1>
                                             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                                                <div className="grid grid-cols-8 gap-4 mb-6 border-b border-slate-50 pb-4 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                                    <div className="col-span-2">Modèle de vélo</div>
-                                                    {YEARS.map(y => <div key={y} className="text-center">{y}</div>)}
+                                                
+                                                {/* Header de la grille (Années + Trimestres) */}
+                                                <div className="flex gap-4 mb-4 border-b border-slate-50 pb-4 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                                    <div className="w-[30%] min-w-[150px] pr-4 flex items-end">Modèle de vélo</div>
+                                                    <div className="w-[70%] flex relative">
+                                                        {YEARS.map((y, i) => (
+                                                            <div key={y} className={`flex-1 text-center flex flex-col ${i > 0 ? 'border-l border-slate-200/50' : ''}`}>
+                                                                <span className="mb-1 text-slate-500 text-xs">{y}</span>
+                                                                <div className="flex justify-around text-[8px] text-slate-300 px-1 opacity-70">
+                                                                    <span className="w-1/4 text-center">Q1</span>
+                                                                    <span className="w-1/4 text-center">Q2</span>
+                                                                    <span className="w-1/4 text-center">Q3</span>
+                                                                    <span className="w-1/4 text-center">Q4</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-4">
-                                                    {filteredBikes.map(b => {
-                                                        const sIdx = Math.max(0, (b.startYear - 2026));
-                                                        const eIdx = Math.min(5, (b.endYear - 2026));
-                                                        const leftPos = (sIdx / 6) * 100;
-                                                        const widthPos = ((eIdx - sIdx + 1) / 6) * 100;
+
+                                                <div className="space-y-3">
+                                                    {activeFilteredBikesForOptions.map(b => {
+                                                        // Calcul de la position exacte basé sur les timestamps
+                                                        const timelineStartMs = new Date(2026, 0, 1).getTime();
+                                                        const timelineEndMs = new Date(2032, 0, 1).getTime();
+                                                        const timelineDuration = timelineEndMs - timelineStartMs;
+
+                                                        const sMs = b.parsedStart ? new Date(b.parsedStart).getTime() : new Date(b.startYear, 0, 1).getTime();
+                                                        const eMs = b.parsedEnd ? new Date(b.parsedEnd).getTime() : new Date(b.endYear, 11, 31).getTime();
+
+                                                        const clampedStart = Math.max(timelineStartMs, Math.min(sMs, timelineEndMs));
+                                                        const clampedEnd = Math.max(timelineStartMs, Math.min(eMs, timelineEndMs));
+
+                                                        const leftPos = ((clampedStart - timelineStartMs) / timelineDuration) * 100;
+                                                        const widthPos = ((clampedEnd - clampedStart) / timelineDuration) * 100;
+
+                                                        const formatDate = (isoStr) => {
+                                                            const d = new Date(isoStr);
+                                                            return !isNaN(d.getTime()) ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+                                                        };
 
                                                         return (
-                                                            <div key={b.id} className="grid grid-cols-8 gap-4 items-center group cursor-pointer" onClick={() => setSelectedBike(b)}>
-                                                                <div className="col-span-2">
+                                                            <div key={b.id} className="flex gap-4 items-center cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-lg transition-colors group" onClick={() => setSelectedBike(b)}>
+                                                                <div className="w-[30%] min-w-[150px] pr-4">
                                                                     <p className="font-bold text-slate-800 truncate leading-tight group-hover:text-blue-600 transition-colors" title={b.name}>{b.name}</p>
                                                                     <span className="text-[10px] font-bold text-slate-400 uppercase">{b.sport}</span>
                                                                 </div>
-                                                                <div className="col-span-6 h-6 bg-slate-50 rounded-lg relative overflow-hidden">
+                                                                
+                                                                <div className="w-[70%] relative h-8 bg-slate-50/50 rounded overflow-visible flex">
+                                                                    {/* Grille de fond pour les trimestres */}
+                                                                    <div className="absolute inset-0 flex pointer-events-none">
+                                                                        {YEARS.map((y, i) => (
+                                                                            <div key={y} className={`flex-1 flex ${i > 0 ? 'border-l border-slate-200/50' : ''}`}>
+                                                                                <div className="flex-1 border-r border-slate-200/30"></div>
+                                                                                <div className="flex-1 border-r border-slate-200/30"></div>
+                                                                                <div className="flex-1 border-r border-slate-200/30"></div>
+                                                                                <div className="flex-1"></div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    
+                                                                    {/* Barre de timeline (le group/bar permet au tooltip d'apparaître uniquement au survol de la barre) */}
                                                                     <div 
-                                                                        className="absolute h-full bg-blue-500 rounded-lg opacity-20 border border-blue-500 group-hover:opacity-40 transition-opacity"
+                                                                        className="absolute h-6 top-1 bg-blue-500/30 rounded border border-blue-500/50 transition-colors group/bar hover:bg-blue-500/50"
                                                                         style={{ left: `${leftPos}%`, width: `${widthPos}%` }}
-                                                                    />
+                                                                    >
+                                                                        {/* Tooltip au survol exact de la barre */}
+                                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/bar:flex flex-col items-center z-10 w-max">
+                                                                            <div className="bg-slate-800 text-white text-xs px-3 py-2 rounded-lg shadow-xl font-medium text-center">
+                                                                                <p className="mb-1 border-b border-slate-700 pb-1">{b.name}</p>
+                                                                                <span className="text-blue-300">SOP:</span> {formatDate(b.parsedStart)} <br/>
+                                                                                <span className="text-emerald-300">EOP:</span> {formatDate(b.parsedEnd)}
+                                                                            </div>
+                                                                            <div className="w-2 h-2 bg-slate-800 rotate-45 -mt-1"></div>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         );
@@ -894,9 +1113,5 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
-    <style>
-        @keyframes fadeInOpacityOnly { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fadeIn { animation: fadeInOpacityOnly 0.3s ease-out forwards; }
-    </style>
 </body>
 </html>
