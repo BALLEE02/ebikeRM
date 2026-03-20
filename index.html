@@ -37,7 +37,7 @@
             const headers = allRows[headerRowIndex].map(h => (h || "").toLowerCase().trim().replace(/[\n\r]/g, ' '));
             const dataRows = allRows.slice(headerRowIndex + 1);
 
-            // Recherche intelligente de colonnes (Exact match d'abord, puis Includes)
+            // Recherche intelligente de colonnes
             const findColIndex = (keywords) => {
                 for (let kw of keywords) {
                     const idx = headers.findIndex(h => h === kw);
@@ -53,7 +53,7 @@
             const idxName = findColIndex(['cc name', 'bikes name', 'eboost name', 'bike', 'vélo', 'ecosystem', 'modèle', 'cc']);
             const idxSport = findColIndex(['segment', 'sport', 'famille']);
             const idxProjectManager = findColIndex(['project manager', 'chef de projet', 'manager']);
-            const idxEkit = findColIndex(['platform ico', 'platform', 'plateforme', 'eboost ekit', 'ekit', 'e-kit']); // ekit est branché sur PLATFORM ICO
+            const idxEkit = findColIndex(['platform ico', 'platform', 'plateforme', 'eboost ekit', 'ekit', 'e-kit']);
             const idxMotorCol = findColIndex(['motor', 'moteur']); 
             const idxBatteryCol = findColIndex(['battery', 'batterie', 'energy']);
             const idxDisplayCol = findColIndex(['display', 'cockpit', 'ihm', 'hmi', 'screen']);
@@ -66,7 +66,6 @@
 
             const yearIndexes = {};
             [2026, 2027, 2028, 2029, 2030, 2031].forEach(year => {
-                // Ignore les colonnes de regroupement type "2026-2030 QTY"
                 let idx = headers.findIndex(h => h.includes(year.toString()) && !h.includes('-'));
                 if (idx !== -1) yearIndexes[year] = idx;
             });
@@ -222,7 +221,7 @@
         const IconArrowRight = ({ size = 24, className="" }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
         const IconClose = ({ size = 24 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
         const IconCpu = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>;
-        const IconSettings = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+        const IconSettings = ({ size = 24 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
         const IconBattery = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>;
         const IconMonitor = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/></svg>;
         const IconDriver = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>;
@@ -234,8 +233,8 @@
 
         const YEARS = [2026, 2027, 2028, 2029, 2030, 2031];
 
-        // --- DASHBOARD ---
-        const DashboardView = ({ bikes, onUpload }) => {
+        // --- VUE PARAMÈTRES BDD (Ancien Dashboard) ---
+        const SettingsView = ({ bikes, onUpload }) => {
             const [status, setStatus] = useState(null);
             const [sheetUrl, setSheetUrl] = useState(() => localStorage.getItem('roadmap_sheet_url') || '');
             
@@ -300,7 +299,7 @@
                         </div>
                     )}
                     
-                    <h1 className="text-2xl font-bold mb-6">Tableau de bord</h1>
+                    <h1 className="text-2xl font-bold mb-6">Paramètres Base de données</h1>
 
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
@@ -308,7 +307,7 @@
                                 <IconDatabase size={20} className="text-blue-500" /> Source de données
                             </h2>
                             <button onClick={loadSharedBase} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 shadow-sm border border-slate-200">
-                                <IconDatabase size={14} /> Charger la base commune (bdd.csv)
+                                <IconDatabase size={14} /> Forcer le rechargement de bdd.csv
                             </button>
                         </div>
                         
@@ -373,7 +372,7 @@
             );
         };
 
-        // --- COMPOSANT ID CARD MODAL (Utilisation de React Portal) ---
+        // --- COMPOSANT ID CARD MODAL ---
         const BikeIdCardModal = ({ selectedBike, onClose }) => {
             if (!selectedBike) return null;
 
@@ -436,7 +435,7 @@
                                 </div>
                                 <div className="h-px bg-blue-200 flex-1 mx-6 relative">
                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-blue-200 px-3 py-1 rounded-full text-xs font-bold text-blue-600 shadow-sm">
-                                        {YEARS.reduce((s, y) => s + (selectedBike[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()} unités
+                                        {YEARS.reduce((s, y) => s + (selectedBike[`q${y.toString().slice(-2)}`] || 0), 0).toLocaleString()} unités totales
                                     </div>
                                 </div>
                                 <div className="text-center">
@@ -545,7 +544,7 @@
             );
         };
 
-        // --- VUE PROJECTIONS (AVEC TRI INTÉGRÉ) ---
+        // --- VUE PROJECTIONS (ANCIEN DASHBOARD) ---
         const ProjectionsView = ({ bikes }) => {
             const [type, setType] = useState('ekit'); 
             const [sortConfig, setSortConfig] = useState({ key: 'total', direction: 'descending' });
@@ -601,7 +600,7 @@
             return (
                 <div className="space-y-6 animate-fadeIn">
                     <div className="flex justify-between items-center">
-                        <h1 className="text-2xl font-bold">Projections Quantités</h1>
+                        <h1 className="text-2xl font-bold">Dashboard <span className="text-slate-400 text-lg font-medium ml-2">| Projections Quantités</span></h1>
                         <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex">
                             {['ekit', 'motor', 'battery', 'display'].map(t => (
                                 <button key={t} onClick={() => setType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${type === t ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
@@ -676,7 +675,7 @@
         };
 
         const App = () => {
-            const [activeTab, setActiveTab] = useState('dashboard');
+            const [activeTab, setActiveTab] = useState('projections'); // Dashboard est maintenant Projections
             
             // Filters State
             const [searchTerm, setSearchTerm] = useState('');
@@ -693,6 +692,28 @@
                 const cached = localStorage.getItem('roadmap_bikes_data');
                 return cached ? JSON.parse(cached) : [];
             });
+
+            // Chargement automatique au démarrage
+            useEffect(() => {
+                const loadAuto = async () => {
+                    if (bikesData.length === 0) {
+                        try {
+                            const res = await fetch('./bdd.csv');
+                            if (res.ok) {
+                                const text = await res.text();
+                                const data = parseCSV(text);
+                                if (data && data.length > 0) {
+                                    setBikesData(data);
+                                    localStorage.setItem('roadmap_bikes_data', JSON.stringify(data));
+                                }
+                            }
+                        } catch (err) {
+                            console.log('Fichier bdd.csv non trouvé ou illisible au démarrage.');
+                        }
+                    }
+                };
+                loadAuto();
+            }, [bikesData.length]);
 
             const handleUpdateData = (data) => {
                 setBikesData(data);
@@ -730,8 +751,8 @@
                             <span className="font-black text-xl tracking-tighter italic uppercase">E-Boost</span>
                         </div>
                         <nav className="flex-1 px-4 py-6 space-y-1">
-                            {['dashboard', 'projections', 'roadmap', 'list'].map(id => {
-                                const labels = { dashboard: 'Dashboard', projections: 'Projections', roadmap: 'Roadmap', list: 'Base Vélos' };
+                            {['projections', 'roadmap', 'list'].map(id => {
+                                const labels = { projections: 'Dashboard', roadmap: 'Roadmap', list: 'Base Vélos' };
                                 return (
                                     <button key={id} onClick={() => setActiveTab(id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${activeTab === id ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800 hover:text-white'}`}>
                                         <span>{labels[id]}</span>
@@ -742,7 +763,7 @@
                     </aside>
 
                     <div className="flex-1 ml-64 flex flex-col min-w-0">
-                        <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-10 shadow-sm flex items-center justify-center min-h-[80px]">
+                        <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-10 shadow-sm flex items-center justify-between min-h-[80px]">
                             {/* Filtres Globaux */}
                             <div className="flex flex-wrap gap-3 w-full max-w-6xl items-center">
                                 <div className="relative flex-[1.5] min-w-[180px]">
@@ -798,18 +819,28 @@
                                     {driversList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
+
+                            <div className="flex items-center ml-4 pl-4 border-l border-slate-200">
+                                <button 
+                                    onClick={() => setActiveTab('settings')}
+                                    className={`p-2 rounded-full transition-colors ${activeTab === 'settings' ? 'bg-blue-100 text-blue-600' : 'text-slate-400 hover:bg-slate-100 hover:text-blue-600'}`}
+                                    title="Paramètres Base de données"
+                                >
+                                    <IconSettings size={24} />
+                                </button>
+                            </div>
                         </header>
 
                         <main className="p-10 max-w-7xl w-full mx-auto">
-                            {bikesData.length === 0 && activeTab !== 'dashboard' ? (
+                            {bikesData.length === 0 && activeTab !== 'settings' ? (
                                 <div className="text-center py-20 animate-fadeIn">
                                     <IconDatabase size={48} className="mx-auto text-slate-300 mb-4" />
                                     <h2 className="text-xl font-bold text-slate-500">Aucune donnée en cache.</h2>
-                                    <button onClick={() => setActiveTab('dashboard')} className="mt-6 text-blue-600 font-bold hover:underline">Aller au Dashboard pour charger les données</button>
+                                    <button onClick={() => setActiveTab('settings')} className="mt-6 text-blue-600 font-bold hover:underline">Aller aux Paramètres pour charger les données</button>
                                 </div>
                             ) : (
                                 <>
-                                    {activeTab === 'dashboard' && <DashboardView bikes={filteredBikes} onUpload={handleUpdateData} />}
+                                    {activeTab === 'settings' && <SettingsView bikes={filteredBikes} onUpload={handleUpdateData} />}
                                     
                                     {activeTab === 'list' && <ListAndIdCardView bikes={filteredBikes} onSelectBike={setSelectedBike} />}
 
